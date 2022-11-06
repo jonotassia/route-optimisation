@@ -4,6 +4,7 @@ import itertools
 import demog
 import lib_func
 
+
 # TODO: Determine how to dynamically generate new variables so that they are unique
 #       (perhaps point a global dictionary or list to a file)?
 
@@ -11,7 +12,7 @@ import lib_func
 
 
 class Patient:
-    new_pat_iter = itertools.count()   # Create a counter to assign new value each time a new obj is created
+    new_pat_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
 
     def __init__(self, status=1, first_name="", last_name="", middle_name="", dob="", sex="", address=""):
         """Initiates and writes-to-file a patient with the following attributes:
@@ -37,7 +38,6 @@ class Patient:
                 break
 
         self.write_pat()
-
 
     def update_patient_details(self):
         pass
@@ -72,7 +72,7 @@ class Patient:
         print("Patient successfully saved.")
 
     @classmethod
-    def load_pat(self):
+    def load_pat(cls):
         # TODO: Determine how to let them search by name as well
         clin_id = input("Patient ID: ")
 
@@ -87,8 +87,9 @@ class Patient:
         except FileNotFoundError:
             print("Patient could not be found.")
 
+
 class Clinician:
-    clin_id_iter = itertools.count()    # Create a counter to assign new value each time a new obj is created
+    clin_id_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
 
     def __init__(self, status=1, first_name="", last_name="", middle_name="", dob="", sex="", address=""):
         """Initiates and writes-to-file a clinician with the following attributes:
@@ -116,7 +117,6 @@ class Clinician:
 
         self.write_clin()
 
-
     def update_clin_details(self):
         pass
 
@@ -139,7 +139,7 @@ class Clinician:
         print("Clinician successfully saved.")
 
     @classmethod
-    def load_clin(self):
+    def load_clin(cls):
         # TODO: Determine how to let them search by name as well
         clin_id = input("Clinician ID: ")
 
@@ -154,12 +154,13 @@ class Clinician:
         except FileNotFoundError:
             print("Clinician could not be found.")
 
+
 class Request:
-    req_id_iter = itertools.count()     # Create a counter to assign new value each time a new obj is created
+    req_id_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
 
     def __init__(self, pat_id, status=1, address="", time_earliest="", time_latest="", date=""):
         """Initializes a new request and links with pat_id. It contains the following attributes:
-            req_id, pat_id, address, earliest time, and latest time"""
+            req_id, pat_id, address, the earliest time, and latest time"""
         self.req_id = next(self.req_id_iter)
         self.status = status
         self.pat_id = pat_id
@@ -171,11 +172,10 @@ class Request:
         self.write_req()
 
     def cancel_request(self):
-
+        pass
 
     def update_request(self):
         pass
-
 
     def write_req(self):
         with open(f"./data/requests/req_{self.req_id}", "wb") as file:
@@ -184,7 +184,7 @@ class Request:
         print("Request successfully saved.")
 
     @classmethod
-    def load_req(self):
+    def load_req(cls):
         req_id = input("Request ID: ")
 
         try:
