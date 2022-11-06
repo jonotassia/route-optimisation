@@ -71,20 +71,21 @@ class Patient:
 
         print("Patient successfully saved.")
 
-def load_pat():
-    # TODO: Determine how to let them search by name as well
-    clin_id = input("Patient ID: ")
+    @classmethod
+    def load_pat(self):
+        # TODO: Determine how to let them search by name as well
+        clin_id = input("Patient ID: ")
 
-    try:
-        with open(f"./data/patients/clin_{clin_id}", "rb") as file:
-            patient = pickle.load(file)
+        try:
+            with open(f"./data/patients/clin_{clin_id}", "rb") as file:
+                patient = pickle.load(file)
 
-            print("Patient successfully loaded.")
+                print("Patient successfully loaded.")
 
-        return patient
+            return patient
 
-    except FileNotFoundError:
-        print("Patient could not be found.")
+        except FileNotFoundError:
+            print("Patient could not be found.")
 
 class Clinician:
     clin_id_iter = itertools.count()    # Create a counter to assign new value each time a new obj is created
@@ -137,20 +138,21 @@ class Clinician:
 
         print("Clinician successfully saved.")
 
-def load_clin():
-    # TODO: Determine how to let them search by name as well
-    clin_id = input("Clinician ID: ")
+    @classmethod
+    def load_clin(self):
+        # TODO: Determine how to let them search by name as well
+        clin_id = input("Clinician ID: ")
 
-    try:
-        with open(f"./data/patients/clin_{clin_id}", "rb") as file:
-            clinician = pickle.load(file)
+        try:
+            with open(f"./data/patients/clin_{clin_id}", "rb") as file:
+                clinician = pickle.load(file)
 
-            print("Clinician successfully loaded.")
+                print("Clinician successfully loaded.")
 
-        return clinician
+            return clinician
 
-    except FileNotFoundError:
-        print("Clinician could not be found.")
+        except FileNotFoundError:
+            print("Clinician could not be found.")
 
 class Request:
     req_id_iter = itertools.count()     # Create a counter to assign new value each time a new obj is created
@@ -171,7 +173,6 @@ class Request:
     def cancel_request(self):
 
 
-
     def update_request(self):
         pass
 
@@ -182,16 +183,17 @@ class Request:
 
         print("Request successfully saved.")
 
-def load_req():
-    req_id = input("Request ID: ")
+    @classmethod
+    def load_req(self):
+        req_id = input("Request ID: ")
 
-    try:
-        with open(f"./data/requests/req_{req_id}", "rb") as file:
-            request = pickle.load(file)
+        try:
+            with open(f"./data/requests/req_{req_id}", "rb") as file:
+                request = pickle.load(file)
 
-            print("Request successfully loaded.")
+                print("Request successfully loaded.")
 
-        return request
+            return request
 
-    except FileNotFoundError:
-        print("Request could not be found.")
+        except FileNotFoundError:
+            print("Request could not be found.")
