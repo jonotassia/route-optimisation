@@ -2,7 +2,7 @@
 # based on a geographic data, patient preferences, and clinician availability.
 # It will use geocoding from Nominatim: https://nominatim.org/
 
-import lib_func
+import classes
 import geopy             # See details here: https://pypi.org/project/geopy/
 
 """
@@ -23,7 +23,7 @@ Secondary actions available:
 # TODO: Investigate how to create a database
 # TODO: Investigate how to automatically batch and run nightly
 # TODO: Determine how to deploy to a server
-# TODO: Determine how to do completion matching on addresses by country
+# TODO: Determine a file structure for saving patients, requests, and clinicians
 
 if __name__ == "__main__":
     pass
