@@ -21,7 +21,7 @@ def confirm_info(obj):
 
     print(f"A {type(obj).__name__} with the following details will be created: ")
 
-    for k, v in obj.vars().items():
+    for k, v in vars(obj).items():
         print(f"{k}: {v}")
 
     while True:

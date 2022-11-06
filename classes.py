@@ -1,32 +1,39 @@
 # This file contains classes to be used in the route optimisation tool.
 import itertools
-import demo
+import demog
 import lib_func
 
 
 class Patient:
-    new_pat_iter = itertools.count()
+    new_pat_iter = itertools.count()   # Create a counter to assign new value each time a new obj is created
 
-    def __init__(self):
+    def __init__(self, first_name="", last_name="", middle_name="", dob="", sex="", address=""):
+        """Initiates a patient with the following attributes:
+        id, first name, last name, middle name, date of birth, sex, and address"""
         self.pat_id = next(self.new_pat_iter)
-
-        while True:
-            demographics = demo.basic_demo()
-
-            if lib_func.confirm_info():
-                break
-
-        self.first_name = demographics["First Name"]
-        self.last_name = demographics["Last Name"]
-        self.middle_name = demographics["Middle Name"]
-        self.dob = demographics["Date of Birth"]
-        self.sex = demographics["Sex"]
-        self.address = demographics["Address"]
+        self.first_name = first_name
+        self.last_name = last_name
+        self.middle_name = middle_name
+        self.dob = dob
+        self.sex = sex
+        self.address = address
 
         with open(f"./data/patients/pat_{self.pat_id}", "w") as file:
-            file.write(demographics)
+            file.write(str(vars(self)))
 
-        print("Patient created.")
+        print("Patient successfully saved.")
+
+    def set_patient_demog(self):
+        while True:
+            demog.basic_demog(self)
+
+            if lib_func.confirm_info(self):
+                break
+
+        with open(f"./data/patients/pat_{self.pat_id}", "w") as file:
+            file.write(str(vars(self)))
+
+        print("Patient successfully saved.")
 
     def update_patient_details(self):
         pass
@@ -49,30 +56,37 @@ class Patient:
 
 
 class Clinician:
-    clin_id_iter = itertools.count()
+    clin_id_iter = itertools.count()    # Create a counter to assign new value each time a new obj is created
 
-    def __init__(self):
+    def __init__(self, first_name="", last_name="", middle_name="", dob="", sex="", address=""):
+        """Initiates a clinician with the following attributes:
+        id, first name, last name, middle name, date of birth, sex, and address"""
         self.clin_id = next(self.clin_id_iter)
+        self.first_name = first_name
+        self.last_name = last_name
+        self.middle_name = middle_name
+        self.dob = dob
+        self.sex = sex
+        self.address = address
 
+        with open(f"./data/patients/clin_{self.clin_id}", "w") as file:
+            file.write(str(vars(self)))
+
+        print("Clinician successfully saved.")
+
+    def set_clin_demog(self):
         while True:
-            demographics = demo.basic_demo()
+            demog.basic_demog(self)
 
-            if lib_func.confirm_info():
+            if lib_func.confirm_info(self):
                 break
 
-        self.first_name = demographics["First Name"]
-        self.last_name = demographics["Last Name"]
-        self.middle_name = demographics["Middle Name"]
-        self.dob = demographics["Date of Birth"]
-        self.sex = demographics["Sex"]
-        self.address = demographics["Address"]
+        with open(f"./data/patients/clin_{self.clin_id}", "w") as file:
+            file.write(str(vars(self)))
 
-        with open(f"./data/clinicians/clin_{self.clin_id}", "w") as file:
-            file.write(demographics)
+        print("Clinician successfully saved.")
 
-        print("Patient created.")
-
-    def update_clinician_details(self):
+    def update_clin_details(self):
         pass
 
     def assign_team(self):
@@ -89,7 +103,7 @@ class Clinician:
 
 
 class Request:
-    req_id_iter = itertools.count()
+    req_id_iter = itertools.count()     # Create a counter to assign new value each time a new obj is created
 
     def __init__(self, address, time):
         req_id = next(self.req_id_iter)
@@ -98,6 +112,8 @@ class Request:
 
         with open("./data/requests", "w") as file:
             pass
+
+        print("Request successfully saved.")
 
     def cancel_request(self):
         pass

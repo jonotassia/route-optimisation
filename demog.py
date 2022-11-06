@@ -3,18 +3,18 @@ import re
 import datetime
 
 
-def basic_demo():
-    """This function will be re-used for both patients and clinician to gather basic demographic details.
-        It will return a dictionary of demographic details to initialize patient/clinician objects"""
+def basic_demog(obj):
+    """This function will be used for both patients and clinician to gather basic demographic details.
+        It will return populate the object when initializing the patient/clinician objects"""
 
-    demo = {"First Name": (get_name())[0],
-            "Last Name": (get_name())[1],
-            "Middle Name": (get_name())[2],
-            "Date of Birth": get_dob(),
-            "Sex": get_sex(),
-            "Address": get_address()}
+    obj.first_name = (get_name())[0],
+    obj.last_name = (get_name())[1],
+    obj.middle_name = (get_name())[2],
+    obj.dob = get_dob(),
+    obj.sex = get_sex(),
+    obj.address = get_address()
 
-    return demo
+    return 2
 
 
 def get_dob():
@@ -74,3 +74,5 @@ def get_address():
         Returns address dictionary with keys for street, building/apt number, city, state, country, and post code."""
     # TODO: Implement Placekey API to validate address
     address = input("Address: ")
+
+    return address
