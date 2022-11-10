@@ -3,20 +3,6 @@ import re
 import datetime
 
 
-def basic_demog(obj):
-    """This function will be used for both Patient and clinician to gather basic demographic details.
-        It will return populate the object when initializing the patient/clinician objects"""
-
-    obj.first_name = (get_name())[0],
-    obj.last_name = (get_name())[1],
-    obj.middle_name = (get_name())[2],
-    obj.dob = get_date(date_of_birth=1),
-    obj.sex = get_sex(),
-    obj.address = get_address()
-
-    return 1
-
-
 def get_date(date_of_birth=0):
     """Gathers a date (either birthdate or appt date).
         Checks for validity and returns dob in DD/MM/YYYY format
@@ -75,7 +61,7 @@ def get_name():
 
 def get_sex():
     """Gathers sex information. Returns sex"""
-    sex_options = ["male", "female", "any"]
+    sex_options = ["male", "female", "not specified"]
 
     while True:
         sex = input("Sex: ").capitalize()

@@ -14,7 +14,7 @@ from datetime import date, time
 
 class Human:
     new_hum_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
-    sex_options = ["male", "female", "any"]
+    sex_options = ["male", "female", "not specified"]
 
     def __init__(self, status=1, first_name="", last_name="", middle_name="", dob="", sex="", address=""):
         """Initiates a human objects with the following attributes:
@@ -35,6 +35,7 @@ class Human:
 
     @dob.setter
     def dob(self, value):
+        """Checks values of date of birth before assigning"""
         match = re.search(r'^([0-9]{1,2})\\/([0-9]{1,2})\\/([0-9]{4})$', value)
 
         try:
@@ -50,6 +51,7 @@ class Human:
 
     @sex.setter
     def sex(self, value):
+        """Checks values of sex before assigning"""
         if value.lower() in self.sex_options:
             self.sex = self.sex_options
         else:
@@ -59,7 +61,12 @@ class Human:
 
     def set_demog(self):
         while True:
-            demog.basic_demog(self)
+            self.first_name = demog.get_name()[0],
+            self.last_name = demog.get_name()[1],
+            self.middle_name = demog.get_name()[2],
+            self.dob = demog.get_date(date_of_birth=1),
+            self.sex = demog.get_sex(),
+            self.address = demog.get_address()
 
             if lib_func.confirm_info(self):
                 self.write_self()

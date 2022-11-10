@@ -4,6 +4,7 @@
 
 import classes
 import geopy             # See details here: https://pypi.org/project/geopy/
+import PySimpleGUI as sg
 
 """
 Primary stream - sequence of events:
@@ -26,4 +27,4 @@ Secondary actions available:
 # TODO: Determine a file structure for saving Patient, Request, and Clinicians
 
 if __name__ == "__main__":
-    pass
+    sg.Window(title="Route Planning", layout=[[]], margins=(100, 50)).read()
