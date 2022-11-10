@@ -3,44 +3,96 @@ import pickle
 import itertools
 import demog
 import lib_func
-from datetime import time
-
+import re
+from datetime import date, time
 
 # TODO: Determine how to dynamically generate new variables so that they are unique
 #       (perhaps point a global dictionary or list to a file)?
 
-# TODO: Determine best way to generate requests that are not tied to a date, but relative to days of week
+# TODO: Determine best way to generate Request that are not tied to a date, but relative to days of week
 
 
-class Patient:
+class Human:
+    new_hum_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
+    sex_options = ["male", "female", "any"]
+
+    def __init__(self, status=1, first_name="", last_name="", middle_name="", dob="", sex="", address=""):
+        """Initiates a human objects with the following attributes:
+        id, first name, last name, middle name, date of birth, sex, and address."""
+        self.id = next(self.new_hum_iter)
+        self.status = status
+        self.first_name = first_name
+        self.last_name = last_name
+        self.middle_name = middle_name
+        self.full_name = self.first_name + self.middle_name + self.last_name
+        self.dob = dob
+        self.sex = sex
+        self.address = address
+
+    @property
+    def dob(self):
+        return self.dob
+
+    @dob.setter
+    def dob(self, value):
+        match = re.search(r'^([0-9]{1,2})\\/([0-9]{1,2})\\/([0-9]{4})$', value)
+
+        try:
+            value = date(match.group(3), match.group(2), match.group(1))
+            self.dob = value
+
+        except ValueError:
+            print("Please enter a valid date of birth in the format DD/MM/YYYY")
+
+    @property
+    def sex(self):
+        return self.sex
+
+    @sex.setter
+    def sex(self, value):
+        if value.lower() in self.sex_options:
+            self.sex = self.sex_options
+        else:
+            raise ValueError(f"Invalid selection. value not in {self.sex_options}")
+
+    # TODO: add address with checks to list of properties.
+
+    def set_demog(self):
+        while True:
+            demog.basic_demog(self)
+
+            if lib_func.confirm_info(self):
+                self.write_self()
+                return 1
+
+    def write_self(self):
+        """Writes the object to file as a JSON using the pickle module"""
+        lib_func.write_obj(self)
+
+    @classmethod
+    def read_self(cls):
+        """Class method to initialise the object from file. Returns the object"""
+        lib_func.read_obj(cls)
+
+
+class Patient(Human):
     new_pat_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
 
     def __init__(self, status=1, first_name="", last_name="", middle_name="", dob="", sex="", address=""):
         """Initiates and writes-to-file a patient with the following attributes:
         id, first name, last name, middle name, date of birth, sex, and address.
-        Additionally, initializes a list of requests linked to the patient"""
-        self.pat_id = next(self.new_pat_iter)
-        self.status = status
-        self.first_name = first_name
-        self.last_name = last_name
-        self.middle_name = middle_name
-        self.dob = dob
-        self.sex = sex
-        self.address = address
+        Additionally, initializes a list of Request linked to the patient"""
+
+        self.id = next(self.new_pat_iter)
+
+        super().__init__(status, first_name, last_name, middle_name, dob, sex, address)
+
         self.requests = []
 
-        self.write_pat()
-
-    def set_patient_demog(self):
-        while True:
-            demog.basic_demog(self)
-
-            if lib_func.confirm_info(self):
-                self.write_pat()
-                return 1
+        self.write_self()
 
     def update_patient_address(self):
-        """Updates the patient's addresss. Updates self.address. Writes updates to file.
+        """Updates the patient's address. Updates self.address. Writes updates to file.
             Returns 0 on successful update."""
 
         print(f"Please enter a new address or leave blank to enter previous start time: {self.address}\n")
@@ -52,7 +104,7 @@ class Patient:
         if valid:
             if new_address:
                 self.address = new_address
-            self.write_pat()
+            self.write_self()
 
         return 1
 
@@ -76,7 +128,7 @@ class Patient:
         time_latest = demog.get_time()
         date = demog.get_date()
 
-        new_request = Request(self.pat_id, address, time_earliest, time_latest, date)
+        new_request = Request(self.id, address, time_earliest, time_latest, date)
         self.requests.append(new_request.req_id)
 
         return new_request
@@ -84,32 +136,8 @@ class Patient:
     def get_requests(self):
         pass
 
-    def write_pat(self):
-        """Writes the patient to file as a JSON using the pickle module"""
-        with open(f"./data/patients/pat_{self.pat_id}", "wb") as file:
-            pickle.dump(self, file)
 
-        print("Patient successfully saved.")
-
-    @classmethod
-    def load_pat(cls):
-        """Class method to initialise a patient from file. Returns the patient as a Patient object"""
-        # TODO: Determine how to let them search by name as well. Suggestion: use database.
-        clin_id = input("Patient name or ID: ")
-
-        try:
-            with open(f"./data/patients/clin_{clin_id}", "rb") as file:
-                patient = pickle.load(file)
-
-                print("Patient successfully loaded.")
-
-            return patient
-
-        except FileNotFoundError:
-            print("Patient could not be found.")
-
-
-class Clinician:
+class Clinician(Human):
     clin_id_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
     # TODO: Determine how to incorporate the concept of skills
     # TODO: Add licensure as an attribute
@@ -119,29 +147,16 @@ class Clinician:
         id, first name, last name, middle name, date of birth, sex, and address
         Assumes standard shift time for start and end time, and inherits address for start/end address.
         These will be updated by a different function called update_start_end"""
+        self.id = next(self.clin_id_iter)
 
-        self.clin_id = next(self.clin_id_iter)
-        self.status = status
-        self.first_name = first_name
-        self.last_name = last_name
-        self.middle_name = middle_name
-        self.dob = dob
-        self.sex = sex
-        self.address = address
+        super().__init__(status, first_name, last_name, middle_name, dob, sex, address)
+
         self.start_address = address
         self.end_address = address
         self.start_time = time(9)
         self.end_time = time(17)
 
-        self.write_clin()
-
-    def set_clin_demog(self):
-        while True:
-            demog.basic_demog(self)
-
-            if lib_func.confirm_info(self):
-                self.write_clin()
-                return 1
+        self.write_self()
 
     def assign_team(self):
         """Assigns the clinician to a team so that they can be considered in that team's route calculation"""
@@ -183,37 +198,13 @@ class Clinician:
             if new_end_address:
                 self.end_address = new_end_address
 
-            self.write_clin()
+            self.write_self()
 
         return 1
 
     def optimize_clinician_trip(self):
         """Calculates the estimated trip route for the clinician. Allows for overrides of start/end constraints"""
         pass
-
-    def write_clin(self):
-        """Writes the clinician to file as a JSON using the pickle module"""
-        with open(f"./data/patients/clin_{self.clin_id}", "wb") as file:
-            pickle.dump(self, file)
-
-        print("Clinician successfully saved.")
-
-    @classmethod
-    def load_clin(cls):
-        """Class method to initialise a clinician from file. Returns the clinician as a Clinician object"""
-        # TODO: Determine how to let them search by name as well. Suggestion: use database.
-        clin_id = input("Clinician name or ID: ")
-
-        try:
-            with open(f"./data/patients/clin_{clin_id}", "rb") as file:
-                clinician = pickle.load(file)
-
-                print("Clinician successfully loaded.")
-
-            return clinician
-
-        except FileNotFoundError:
-            print("Clinician could not be found.")
 
 
 class Request:
@@ -234,7 +225,7 @@ class Request:
         self.cancel_reason = None
         self.sched_status = sched_status
 
-        self.write_req()
+        self.write_self()
 
     def cancel_request(self):
         """This method sets the status of a request to inactive and the sched status to "cancelled".
@@ -263,7 +254,7 @@ class Request:
                 self.cancel_reason = reason
                 self.status = 0
 
-            self.write_req()
+            self.write_self()
 
             return 1
 
@@ -307,7 +298,7 @@ class Request:
 
                     if new_end:
                         self.time_latest = new_end
-                    self.write_req()
+                    self.write_self()
 
                 break
 
@@ -322,35 +313,21 @@ class Request:
                 if valid:
                     if new_address:
                         self.address = new_address
-                    self.write_req()
+                    self.write_self()
 
                 break
 
             else:
                 print("Please select a valid option.\n")
 
-    def write_req(self):
-        """Writes the request to file as a JSON using the pickle module"""
-        with open(f"./data/requests/req_{self.req_id}", "wb") as file:
-            pickle.dump(self, file)
-
-        print("Request successfully saved.")
-
     def schedule_request(self):
         pass
 
+    def write_self(self):
+        """Writes the object to file as a JSON using the pickle module"""
+        lib_func.write_obj(self)
+
     @classmethod
-    def load_req(cls):
-        """Class method to initialise a request from file. Returns the request as a Request object"""
-        req_id = input("Request ID: ")
-
-        try:
-            with open(f"./data/requests/req_{req_id}", "rb") as file:
-                request = pickle.load(file)
-
-                print("Request successfully loaded.")
-
-            return request
-
-        except FileNotFoundError:
-            print("Request could not be found.")
+    def read_self(cls):
+        """Class method to initialise the object from file. Returns the object"""
+        lib_func.read_obj(cls)

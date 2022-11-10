@@ -1,10 +1,10 @@
-# This file contains functions to gather demographic information on patients and clinicians
+# This file contains functions to gather demographic information on Patient and Clinicians
 import re
 import datetime
 
 
 def basic_demog(obj):
-    """This function will be used for both patients and clinician to gather basic demographic details.
+    """This function will be used for both Patient and clinician to gather basic demographic details.
         It will return populate the object when initializing the patient/clinician objects"""
 
     obj.first_name = (get_name())[0],
@@ -78,14 +78,18 @@ def get_sex():
     sex_options = ["male", "female", "any"]
 
     while True:
-        pref_sex = input("Sex Preference: ").capitalize()
+        sex = input("Sex: ").capitalize()
 
-        if pref_sex == "q" or "":
+        if sex == "q" or "":
             return 0
 
-        if pref_sex.lower() in sex_options:
-            return pref_sex
+        elif sex.lower() in sex_options:
+            return sex
 
+        else:
+            print("Please enter a valid sex from the options below.")
+            for i, k in enumerate(sex_options):
+                print(f"{i}. {k}")
 
 def get_address():
     """Uses Place Key api to ensure address is valid: https://www.placekey.io/blog/getting-started-with-placekey-io

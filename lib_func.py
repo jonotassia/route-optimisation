@@ -1,4 +1,6 @@
 # This file contains various functions to be used in the route optimisation tool.
+import pickle
+
 
 def yes_or_no(prompt):
     """Validates a user's input as yes (return 1) or no (return 0)."""
@@ -38,8 +40,32 @@ def get_cat_value(cat_list, prompt):
             print("Invalid selection.")
 
 
+def write_obj(obj):
+    """Writes the object to file as a JSON using the pickle module"""
+    with open(f"./data/{obj.__class__.__name__}/{obj.id}", "wb") as file:
+        pickle.dump(obj, file)
+    print(f"{obj.__class__.__name__} successfully saved.")
+
+
+def read_obj(obj):
+    """Class method to initialise a patient from file. Returns the patient as a Patient object"""
+    # TODO: Determine how to let them search by name as well. Suggestion: use database.
+    obj_id = input("Name or ID: ")
+
+    try:
+        with open(f"./data/{obj.__class__.__name__}/{obj_id}", "rb") as file:
+            patient = pickle.load(file)
+            print(f"{obj.__class__.__name__} successfully loaded.")
+        return patient
+
+    except FileNotFoundError:
+        print(f"{obj.__class__.__name__} could not be found.")
+
+
+
+
 def assign_routes():
-    """Considers availability of all patients and number of requests to book and allocates appropriately"""
+    """Considers availability of all Patient and number of Request to book and allocates appropriately"""
     pass
 
 
@@ -57,6 +83,6 @@ def confirm_info(obj):
 
 
 def evaluate_requests():
-    """Evaluates all requests and marks them as no shows if they are past their expected date"""
-    # TODO: Determine how to pull all requests without being in a request context. Suggestion: Use a database.
+    """Evaluates all Request and marks them as no shows if they are past their expected date"""
+    # TODO: Determine how to pull all Request without being in a request context. Suggestion: Use a database.
     pass
