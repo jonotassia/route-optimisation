@@ -36,12 +36,25 @@ class Patient:
             demog.basic_demog(self)
 
             if lib_func.confirm_info(self):
-                break
+                self.write_pat()
+                return 1
 
-        self.write_pat()
+    def update_patient_address(self):
+        """Updates the patient's addresss. Updates self.address. Writes updates to file.
+            Returns 0 on successful update."""
 
-    def update_patient_details(self):
-        pass
+        print(f"Please enter a new address or leave blank to enter previous start time: {self.address}\n")
+        new_address = demog.get_address()
+
+        valid = lib_func.yes_or_no("Please confirm that the updated details are correct.\n"
+                                   f"Address: {new_address if new_address else self.address}")
+
+        if valid:
+            if new_address:
+                self.address = new_address
+            self.write_pat()
+
+        return 1
 
     def assign_team(self):
         """Assigns the patient to a team so that they can be considered in that team's route calculation"""
@@ -127,9 +140,8 @@ class Clinician:
             demog.basic_demog(self)
 
             if lib_func.confirm_info(self):
-                break
-
-        self.write_clin()
+                self.write_clin()
+                return 1
 
     def assign_team(self):
         """Assigns the clinician to a team so that they can be considered in that team's route calculation"""
@@ -170,6 +182,8 @@ class Clinician:
 
             if new_end_address:
                 self.end_address = new_end_address
+
+            self.write_clin()
 
         return 1
 
@@ -293,6 +307,7 @@ class Request:
 
                     if new_end:
                         self.time_latest = new_end
+                    self.write_req()
 
                 break
 
@@ -307,13 +322,12 @@ class Request:
                 if valid:
                     if new_address:
                         self.address = new_address
+                    self.write_req()
 
                 break
 
             else:
                 print("Please select a valid option.\n")
-
-        self.write_req()
 
     def write_req(self):
         """Writes the request to file as a JSON using the pickle module"""
