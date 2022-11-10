@@ -17,7 +17,7 @@ def basic_demog(obj):
     return 1
 
 
-def get_date(date_of_birth=0):
+def get_date(value, date_of_birth=0):
     """Gathers a date (either birthdate or appt date).
         Checks for validity and returns dob in DD/MM/YYYY format
         Keyword Arguments:
@@ -42,38 +42,7 @@ def get_date(date_of_birth=0):
                 print("Please enter a valid date of birth in the format DD/MM/YYYY")
 
 
-def get_name():
-    """Gathers name information. Returns first name, middle name, and last name"""
-    while True:
-        first_name = input("First Name: ").capitalize()
-
-        if first_name == "q" or "":
-            return 0
-
-        elif first_name:
-            break
-
-        else:
-            print("Please enter a first name.")
-
-    while True:
-        last_name = input("Last Name: ").capitalize()
-
-        if last_name == "q" or "":
-            return 0
-
-        elif last_name:
-            break
-
-        else:
-            print("Please enter a last name.")
-
-    middle_name = input("Middle Name (Optional): ").capitalize()
-
-    return first_name, middle_name, last_name
-
-
-def get_sex():
+def get_sex(value):
     """Gathers sex information. Returns sex"""
     sex_options = ["male", "female", "any"]
 
@@ -87,7 +56,7 @@ def get_sex():
             return pref_sex
 
 
-def get_address():
+def get_address(value):
     """Uses Place Key api to ensure address is valid: https://www.placekey.io/blog/getting-started-with-placekey-io
         Returns address dictionary with keys for street, building/apt number, city, state, country, and post code."""
     # TODO: Implement Placekey API to validate address
@@ -100,7 +69,7 @@ def get_address():
         return address
 
 
-def get_time():
+def get_time(value):
     """Gets, validates, and returns a time"""
     while True:
         time = input("Time (HHMM): ")
