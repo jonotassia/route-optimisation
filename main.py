@@ -4,7 +4,6 @@
 
 import classes
 import geopy             # See details here: https://pypi.org/project/geopy/
-import PySimpleGUI as sg
 
 """
 Primary stream - sequence of events:

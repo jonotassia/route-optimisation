@@ -61,7 +61,7 @@ def get_name():
 
 def get_sex():
     """Gathers sex information. Returns sex"""
-    sex_options = ["male", "female", "not specified"]
+    c_sex_options = ("male", "female", "not specified")
 
     while True:
         sex = input("Sex: ").capitalize()
@@ -69,13 +69,14 @@ def get_sex():
         if sex == "q" or "":
             return 0
 
-        elif sex.lower() in sex_options:
+        elif sex.lower() in c_sex_options:
             return sex
 
         else:
             print("Please enter a valid sex from the options below.")
-            for i, k in enumerate(sex_options):
+            for i, k in enumerate(c_sex_options):
                 print(f"{i}. {k}")
+
 
 def get_address():
     """Uses Place Key api to ensure address is valid: https://www.placekey.io/blog/getting-started-with-placekey-io

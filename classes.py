@@ -4,7 +4,7 @@ import itertools
 import demog
 import lib_func
 import re
-from datetime import date, time
+from datetime import datetime, date, time
 
 # TODO: Determine how to dynamically generate new variables so that they are unique
 #       (perhaps point a global dictionary or list to a file)?
@@ -13,13 +13,14 @@ from datetime import date, time
 
 
 class Human:
-    new_hum_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
-    sex_options = ["male", "female", "not specified"]
+    _new_hum_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
+    _tracked_instances = []
+    c_sex_options = ("male", "female", "not specified")
 
     def __init__(self, status=1, first_name="", last_name="", middle_name="", dob="", sex="", address=""):
         """Initiates a human objects with the following attributes:
         id, first name, last name, middle name, date of birth, sex, and address."""
-        self.id = next(self.new_hum_iter)
+        self.id = next(self._new_hum_iter)
         self.status = status
         self.first_name = first_name
         self.last_name = last_name
@@ -52,10 +53,10 @@ class Human:
     @sex.setter
     def sex(self, value):
         """Checks values of sex before assigning"""
-        if value.lower() in self.sex_options:
-            self.sex = self.sex_options
+        if value.lower() in self.c_sex_options:
+            self.sex = self.c_sex_options
         else:
-            raise ValueError(f"Invalid selection. value not in {self.sex_options}")
+            raise ValueError(f"Invalid selection. value not in {self.c_sex_options}")
 
     # TODO: add address with checks to list of properties.
 
@@ -81,16 +82,21 @@ class Human:
         """Class method to initialise the object from file. Returns the object"""
         lib_func.read_obj(cls)
 
+    @classmethod
+    def load_tracked_instances(cls):
+        lib_func.load_tracked_obj(cls)
+
 
 class Patient(Human):
-    new_pat_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
+    _new_pat_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
+    _tracked_instances = []
 
     def __init__(self, status=1, first_name="", last_name="", middle_name="", dob="", sex="", address=""):
         """Initiates and writes-to-file a patient with the following attributes:
         id, first name, last name, middle name, date of birth, sex, and address.
         Additionally, initializes a list of Request linked to the patient"""
 
-        self.id = next(self.new_pat_iter)
+        self.id = next(self._new_pat_iter)
 
         super().__init__(status, first_name, last_name, middle_name, dob, sex, address)
 
@@ -145,7 +151,8 @@ class Patient(Human):
 
 
 class Clinician(Human):
-    clin_id_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
+    _clin_id_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
+    _tracked_instances = {}
     # TODO: Determine how to incorporate the concept of skills
     # TODO: Add licensure as an attribute
 
@@ -154,7 +161,7 @@ class Clinician(Human):
         id, first name, last name, middle name, date of birth, sex, and address
         Assumes standard shift time for start and end time, and inherits address for start/end address.
         These will be updated by a different function called update_start_end"""
-        self.id = next(self.clin_id_iter)
+        self.id = next(self._clin_id_iter)
 
         super().__init__(status, first_name, last_name, middle_name, dob, sex, address)
 
@@ -216,8 +223,9 @@ class Clinician(Human):
 
 class Request:
     req_id_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
-    c_sched_status = ["Unscheduled", "Scheduled", "No Show", "Cancelled"]
-    c_cancel_reason = ["Clinician unavailable", "Patient Unavailable", "No longer needed"]
+    tracked_instances = {}
+    c_sched_status = ("Unscheduled", "Scheduled", "No Show", "Cancelled")
+    c_cancel_reason = ("Clinician unavailable", "Patient Unavailable", "No longer needed", "Expired")
 
     def __init__(self, pat_id, status=1, sched_status="", address="", time_earliest="", time_latest="", date=""):
         """Initializes a new request and links with pat_id. It contains the following attributes:
@@ -338,3 +346,25 @@ class Request:
     def read_self(cls):
         """Class method to initialise the object from file. Returns the object"""
         lib_func.read_obj(cls)
+
+    @classmethod
+    def load_tracked_instances(cls):
+        lib_func.load_tracked_obj(cls)
+
+    @classmethod
+    def evaluate_requests(cls):
+        """Evaluates all Request and marks them as no shows if they are past their expected date"""
+        for instance in cls.tracked_instances:
+            try:
+                with open(f"./data/{type(cls).__name__}/{instance['id']}", "rb") as read_file:
+                    request = pickle.load(read_file)
+
+                    # Evaluate date against current date and mark as expired if due before current date
+                    if datetime.strptime(request["date"], '%m-%d-%Y').date() < date.today():
+                        request.status = 0
+                        request.cancel_reason = cls.c_cancel_reason[3]
+                        cls.write_self(request)
+
+            except FileNotFoundError as err:
+                print("File could not be found.")
+                return err
