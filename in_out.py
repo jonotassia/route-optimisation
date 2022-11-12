@@ -19,7 +19,7 @@ def write_obj(obj):
                                           "dob": obj["dob"]}
 
 
-def read_obj(obj):
+def get_obj(cls):
     """Class method to initialise a patient from file. Returns the patient as a Patient object"""
     # TODO: Determine how to let them search by name as well. Suggestion: use database.
     obj_id = input("Name or ID: ")
@@ -31,7 +31,7 @@ def read_obj(obj):
         match_list = []
 
         # Measure similarity by levenshtein distance and prompt user to confirm details
-        for dict_id, val in obj._tracked_instances.items():
+        for dict_id, val in cls._tracked_instances.items():
             if levratio(val["full_name"], obj_id) > 0.8:
                 print(f"{count}) Name: {val['full_name']}, ID: {val['id']}, DOB: {val['dob']}")
                 match_list.append(dict_id)
@@ -56,32 +56,33 @@ def read_obj(obj):
             except TypeError:
                 continue
 
-    # Load from file
-    try:
-        with open(f"./data/{obj.__class__.__name__}/{obj_id}", "rb") as file:
-            patient = pickle.load(file)
+    file = f"./data/{cls.__class__.__name__}/{obj_id}"
+    load_obj(cls, file)
 
-        print(f"{obj.__class__.__name__} successfully loaded.")
-        return patient
+
+async def load_obj(cls, file_path):
+    """Loads an object from file. Leveraged by class methods when loading an object from file."""
+    try:
+        with open(file_path, "rb") as file:
+            obj = pickle.load(file)
+
+        print(f"{cls.__class__.__name__} successfully loaded.")
+        return obj
 
     except FileNotFoundError:
-        print(f"{obj.__class__.__name__} could not be found.")
+        print(f"{cls.__class__.__name__} could not be found.")
 
 
-def load_tracked_obj(obj):
+async def load_tracked_obj(cls):
     """Class method to initialise all instances of a class from file. Modifies the class attribute tracked_instances.
         This is uses to allow for quick searching by name, date of birth, and ID"""
     # TODO: Determine if there is a way to remove name and dob dynamically for requests
 
-    try:
-        file_path = pathlib.Path(f"./data/{obj.__class__.__name__}").glob("*.txt")
-        for file in file_path:
-            obj_details = pickle.load(open(file, "rb"))
-            obj._tracked_instances[obj_details["id"]] = {"full_name": obj_details["full_name"],
-                                                         "dob": obj_details["dob"]}
-
-    except FileNotFoundError:
-        print(f"{obj.__class__.__name__} could not be found.")
+    file_path = pathlib.Path(f"./data/{cls.__class__.__name__}").glob("*.txt")
+    for file in file_path:
+        obj = await load_obj(cls, file)
+        obj._tracked_instances[obj["id"]] = {"full_name": obj["full_name"],
+                                             "dob": obj["dob"]}
 
 
 def assign_routes():

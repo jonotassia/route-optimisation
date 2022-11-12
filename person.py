@@ -76,9 +76,9 @@ class Human:
         in_out.write_obj(self)
 
     @classmethod
-    def read_self(cls):
+    def get_self(cls):
         """Class method to initialise the object from file. Returns the object"""
-        in_out.read_obj(cls)
+        in_out.get_obj(cls)
 
     @classmethod
     def load_tracked_instances(cls):
