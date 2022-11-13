@@ -18,15 +18,17 @@ class Human:
     def __init__(self, status=1, first_name="", last_name="", middle_name="", dob="", sex="", address=""):
         """Initiates a human objects with the following attributes:
         id, first name, last name, middle name, date of birth, sex, and address."""
-        self.id = next(self._new_hum_iter)
+        self._id = next(self._new_hum_iter)
         self.status = status
         self.first_name = first_name
         self.last_name = last_name
         self.middle_name = middle_name
-        self.full_name = self.first_name + self.middle_name + self.last_name
+        self.name = self.first_name + self.middle_name + self.last_name
         self.dob = dob
         self.sex = sex
         self.address = address
+
+        self.write_self()
 
     @property
     def dob(self):
@@ -56,7 +58,7 @@ class Human:
         else:
             raise ValueError(f"Invalid selection. value not in {self.c_sex_options}")
 
-    # TODO: add address with checks to list of properties.
+    # TODO: add address with checks to list of class properties.
 
     def set_demog(self):
         while True:
@@ -76,29 +78,35 @@ class Human:
         in_out.write_obj(self)
 
     @classmethod
-    def read_self(cls):
+    def load_self(cls):
         """Class method to initialise the object from file. Returns the object"""
-        in_out.read_obj(cls)
+        in_out.get_obj(cls)
 
     @classmethod
     def load_tracked_instances(cls):
         in_out.load_tracked_obj(cls)
 
+    # TODO: Add a class method to reactivate a record
+
 
 class Patient(Human):
     _new_pat_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
     _tracked_instances = []
+    _c_inactive_reason = ["No longer under care", "Expired", "Added in error"]
 
     def __init__(self, status=1, first_name="", last_name="", middle_name="", dob="", sex="", address=""):
-        """Initiates and writes-to-file a patient with the following attributes:
+        """
+        Initiates and writes-to-file a patient with the following attributes:
         id, first name, last name, middle name, date of birth, sex, and address.
-        Additionally, initializes a list of Visits linked to the patient"""
-
-        self.id = next(self._new_pat_iter)
-
+        Additionally, initializes a list of Visits linked to the patient
+        """
         super().__init__(status, first_name, last_name, middle_name, dob, sex, address)
 
+        self.id = next(self._new_pat_iter)
+        self.inactive_reason = None
         self.visits = []
+        self.death_date = None
+        self.death_time = None
 
         self.write_self()
 
@@ -119,16 +127,16 @@ class Patient(Human):
 
         return 1
 
-    def assign_team(self):
-        """Assigns the patient to a team so that they can be considered in that team's route calculation"""
-        pass
-
-    def set_preferences(self):
+    def update_preferences(self):
         """Retrieves the patient's visit preferences"""
         pass
 
-    def update_preferences(self):
-        """Updates the patient's visit preferences"""
+    def update_self(self):
+        """Groups all update methods for user selection. This will be called when modifying record in navigation.py"""
+        pass
+
+    def assign_team(self):
+        """Assigns the patient to a team so that they can be considered in that team's route calculation"""
         pass
 
     def generate_request(self):
@@ -140,17 +148,79 @@ class Patient(Human):
         exp_date = validate.get_date()
 
         new_request = Visit(self.id, address, time_earliest, time_latest, exp_date)
-        self.visits.append(new_request.id)
+        self.visits.append(new_request._id)
 
         return new_request
 
     def get_requests(self):
         pass
 
+    def inactivate_self(self):
+        """
+        This method sets the status of a patient to inactive.
+        Prompts the user for an inactive reason from c_inactive_reason and files back to self.inactive_reason.
+        If expired is selected, user will be prompted for a date and time of death.
+        The user will be prompted if the patient has visits associated with them.
+        If so, they will be prompted to either quit or cancel all visits.
+        """
+
+        # Checks if request is already inactive.
+        if self.status == 0:
+            print("This record is already inactive.")
+            return 0
+
+        # Checks if the patient has active visits associated with them and prompt user to cancel or quit.
+        elif self.visits:
+            prompt = """This patient has active appointments. 
+                        Proceeding will cancel all requests. 
+                        Are you sure you want to continue?"""
+
+            if not validate.yes_or_no(prompt):
+                return 0
+
+        else:
+            reason = validate.get_cat_value(self._c_inactive_reason, "Select an inactive reason. ")
+
+            # Ensure death_date and death_time are initialized for assignment later, even if reason is not death.
+            death_date = self.death_date
+            death_time = self.death_time
+
+            # If reason is death, request death date and time, but don't assign until user confirms inactivation.
+            if reason == self._c_inactive_reason[1]:
+                print("Please enter a death date and time.\n")
+                death_date = validate.get_date()
+                death_time = validate.get_time()
+
+            prompt = "Are you sure you want to inactivate this record?"
+            if validate.yes_or_no(prompt):
+                self.inactive_reason = reason
+                self.status = 0
+                self.death_date = death_date
+                self.death_time = death_time
+
+                # Cancel linked visit requests with a reason of system action
+                for visit_id in self.visits:
+                    visit = in_out.load_obj(Visit, f"./data/Visit/{visit_id}")
+
+                    visit.status = 0
+                    visit.cancel_reason = visit.c_cancel_reason[4]
+
+                    visit.write_self()
+
+                    print("Visits successfully cancelled.")
+
+                self.write_self()
+
+                print("Record successfully inactivated.")
+
+                return 1
+
 
 class Clinician(Human):
     _clin_id_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
     _tracked_instances = {}
+    _c_inactive_reason = ["No longer works here", "Switched roles", "Added in error"]
+
     # TODO: Determine how to incorporate the concept of skills
     # TODO: Add licensure as an attribute
 
@@ -159,14 +229,15 @@ class Clinician(Human):
         id, first name, last name, middle name, date of birth, sex, and address
         Assumes standard shift time for start and end time, and inherits address for start/end address.
         These will be updated by a different function called update_start_end"""
-        self.id = next(self._clin_id_iter)
 
         super().__init__(status, first_name, last_name, middle_name, dob, sex, address)
 
+        self.id = next(self._clin_id_iter)
         self.start_address = address
         self.end_address = address
         self.start_time = time(9)
         self.end_time = time(17)
+        self.inactive_reason = None
 
         self.write_self()
 
@@ -174,6 +245,9 @@ class Clinician(Human):
         """Assigns the clinician to a team so that they can be considered in that team's route calculation"""
         # TODO: Determine how to incorporate concept of a team
         pass
+
+    def update_self(self):
+        """Groups all update methods for user selection. This will be called when modifying record in navigation.py"""
 
     def update_start_end(self):
         """Sets the starting and ending time/geocoded address for the clinician
@@ -217,3 +291,28 @@ class Clinician(Human):
     def optimize_clinician_trip(self):
         """Calculates the estimated trip route for the clinician. Allows for overrides of start/end constraints"""
         pass
+
+    def inactivate_self(self):
+        """
+        This method sets the status of a clinician to inactive.
+        Prompts the user for an inactive reason from c_inactive_reason and files back to self.inactive_reason.
+        """
+
+        # Checks if request is already inactive.
+        if self.status == 0:
+            print("This record is already inactive.")
+            return 0
+
+        else:
+            reason = validate.get_cat_value(self._c_inactive_reason, "Select an inactive reason. ")
+
+            prompt = "Are you sure you want to inactivate this record?"
+            if validate.yes_or_no(prompt):
+                self.inactive_reason = reason
+                self.status = 0
+
+                self.write_self()
+
+                print("Record successfully inactivated.")
+
+                return 1

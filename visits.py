@@ -3,22 +3,22 @@ import pickle
 import itertools
 import validate
 import in_out
+from person import Patient
 from datetime import datetime, date
-import asyncio
-import aiofiles
 
 
 class Visit:
     visit_id_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
     tracked_instances = {}
     c_sched_status = ("Unscheduled", "Scheduled", "No Show", "Cancelled")
-    c_cancel_reason = ("Clinician unavailable", "Patient Unavailable", "No longer needed", "Expired")
+    c_cancel_reason = ("Clinician unavailable", "Patient unavailable", "No longer needed", "Expired", "System action")
 
     def __init__(self, pat_id, status=1, sched_status="", address="", time_earliest="", time_latest="", exp_date=""):
         """Initializes a new request and links with pat_id. It contains the following attributes:
-            req_id, pat_id, status, address, the earliest time, latest time, sched status, and cancel_reason"""
-        self.id = next(self.visit_id_iter)
-        self.pat_id = pat_id
+            req_id, pat_id, name, status, address, the earliest time, latest time, sched status, and cancel_reason"""
+        self._id = next(self.visit_id_iter)
+        self._pat_id = pat_id
+        self._name = "Visit" + str(self._id)
         self.status = status
         self.address = address
         self.time_earliest = time_earliest
@@ -29,39 +29,8 @@ class Visit:
 
         self.write_self()
 
-    def cancel_visit(self):
-        """This method sets the status of a request to inactive and the sched status to "cancelled".
-        Prompts the user for a cancel reason and files back to self.cancel_reason
-        It will not be cancelled if the request meets any of the below criteria:
-        - The request is in the past
-        - The request has already been scheduled
-        - the request has already been deleted
-        """
-
-        # Checks if request is already inactive
-        if self.status == 0:
-            print("This request is already inactive.")
-            return 0
-
-        # Checks that sched status is scheduled using the schedule category list
-        elif self.sched_status == self.c_sched_status[1]:
-            print("This request is already scheduled. Please cancel the appointment instead.")
-            return 0
-
-        else:
-            reason = validate.get_cat_value(self.c_cancel_reason, "Select a cancel reason. ")
-
-            prompt = "Are you sure you want to cancel this request? You will be unable to schedule this request."
-            if validate.yes_or_no(prompt):
-                self.cancel_reason = reason
-                self.status = 0
-
-            self.write_self()
-
-            return 1
-
-    def update_visit(self):
-        """Allows the user to update request information, including date/time window or address
+    def update_self(self):
+        """Allows the user to update visit information, including date/time window or address
             Updates self.date, self.time_earliest, and self.time_latest. Writes updates to file.
             Returns 0 on successful update."""
 
@@ -130,13 +99,51 @@ class Visit:
         in_out.write_obj(self)
 
     @classmethod
-    def read_self(cls):
+    def load_self(cls):
         """Class method to initialise the object from file. Returns the object"""
-        in_out.read_obj(cls)
+        in_out.get_obj(cls)
 
     @classmethod
     def load_tracked_instances(cls):
         in_out.load_tracked_obj(cls)
+
+    def inactivate_self(self):
+        """This method sets the status of a visit request to inactive and the sched status to "cancelled".
+        Prompts the user for a cancel reason and files back to self.cancel_reason
+        Removes this request from the associated patient.
+        It will not be cancelled if the request meets any of the below criteria:
+        - The request is in the past
+        - The request has already been scheduled
+        - the request has already been deleted
+        """
+
+        # Checks if request is already inactive
+        if self.status == 0:
+            print("This record is already inactive.")
+            return 0
+
+        # Checks that sched status is scheduled using the schedule category list
+        elif self.sched_status == self.c_sched_status[1]:
+            print("This request is already scheduled. Please cancel the appointment instead.")
+            return 0
+
+        else:
+            reason = validate.get_cat_value(self.c_cancel_reason, "Select a cancel reason. ")
+
+            prompt = "Are you sure you want to cancel this request? You will be unable to schedule this request."
+            if validate.yes_or_no(prompt):
+                self.cancel_reason = reason
+                self.status = 0
+                self.write_self()
+
+                # Remove visit from patient's list
+                patient = in_out.load_obj(Patient, f"./data/Patient/{self._pat_id}")
+                patient.visits.remove(self._id)
+                patient.write_self()
+
+                print("Visit successfully cancelled.")
+
+                return 1
 
     @classmethod
     async def evaluate_requests(cls):
@@ -155,3 +162,5 @@ class Visit:
             except FileNotFoundError as err:
                 print("File could not be found.")
                 return err
+
+    # TODO: Add a class method to reactivate a record
