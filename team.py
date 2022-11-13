@@ -1,0 +1,91 @@
+# This file contains the Visit class to be used in the route optimisation tool.
+import pickle
+import itertools
+import validate
+import in_out
+from person import Patient, Clinician
+
+
+class Team:
+    team_id_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
+    tracked_instances = {}
+
+    def __init__(self, status=1, name=None):
+        """Initializes a new request and links with pat_id. It contains the following attributes:
+            req_id, pat_id, name, status, address, the earliest time, latest time, sched status, and cancel_reason"""
+        self._id = next(self.team_id_iter)
+        self.name = name
+        self.status = status
+        self._pat_id = []
+        self._clin_id = []
+        self.size = len(self._clin_id)
+        self.pat_load = len(self._pat_id)
+
+        self.write_self()
+
+    def update_self(self):
+        """Allows the user to update team information"""
+        pass
+
+    def write_self(self):
+        """Writes the object to file as a JSON using the pickle module"""
+        in_out.write_obj(self)
+
+    @classmethod
+    def load_self(cls):
+        """Class method to initialise the object from file. Returns the object"""
+        in_out.get_obj(cls)
+
+    @classmethod
+    def load_tracked_instances(cls):
+        in_out.load_tracked_obj(cls)
+
+    def inactivate_self(self):
+        """
+        This method sets the status of a team to inactive.
+        If patients and clinicians are currently linked, prompt user to quit or unlink.
+        """
+
+        # Checks if request is already inactive.
+        if self.status == 0:
+            print("This record is already inactive.")
+            return 0
+
+        # Checks if the team has active patients or clinicians linked to it and prompt user to cancel or quit.
+        elif self._pat_id or self._clin_id:
+            prompt = """This team is linked to at least one patient or clinician. 
+                        Proceeding will unlink all patients and clinicians. 
+                        Are you sure you want to continue?"""
+
+            if not validate.yes_or_no(prompt):
+                return 0
+
+        else:
+            prompt = "Are you sure you want to inactivate this record?"
+
+            if validate.yes_or_no(prompt):
+                self.status = 0
+
+                # Remove team from patients and clinicians
+                if self._pat_id:
+                    for pat_id in self._pat_id:
+                        pat = in_out.load_obj(Patient, f"./data/Patient/{pat_id}")
+                        pat.team = None
+                        pat.write_self()
+
+                if self._clin_id:
+                    for clin_id in self._clin_id:
+                        clin = in_out.load_obj(Clinician, f"./data/Clinician/{clin_id}")
+                        clin.team = None
+                        clin.write_self()
+
+                self.write_self()
+                print("Record successfully inactivated.")
+
+                return 1
+
+    def assign_routes(self):
+        """Considers availability of all Patient and number of Visit to book and allocates appropriately"""
+        pass
+
+    # TODO: Add a class method to reactivate a record

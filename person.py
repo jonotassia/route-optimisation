@@ -3,6 +3,8 @@ import itertools
 import validate
 import in_out
 import re
+
+from team import Team
 from visits import Visit
 from datetime import date, time
 
@@ -27,6 +29,10 @@ class Human:
         self.dob = dob
         self.sex = sex
         self.address = address
+
+        # TODO: Make team name a property so that it can dynamically pull team name from team id (ie networked)
+        self._team_id = None
+        self._team_name = None
 
         self.write_self()
 
@@ -209,6 +215,13 @@ class Patient(Human):
 
                     print("Visits successfully cancelled.")
 
+                # Remove from team
+                team = in_out.load_obj(Team, f"./data/Team/{self._team_id}")
+                team._pat_id.remove(self.id)
+                team.write_self()
+
+                print("Team successfully unlinked.")
+
                 self.write_self()
 
                 print("Record successfully inactivated.")
@@ -310,6 +323,13 @@ class Clinician(Human):
             if validate.yes_or_no(prompt):
                 self.inactive_reason = reason
                 self.status = 0
+
+                # Remove from team
+                team = in_out.load_obj(Team, f"./data/Team/{self._team_id}")
+                team._clin_id.remove(self.id)
+                team.write_self()
+
+                print("Team successfully unlinked.")
 
                 self.write_self()
 

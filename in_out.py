@@ -112,8 +112,3 @@ def load_tracked_obj(cls):
 
     except FileNotFoundError:
         print(f"{cls.__name__} could not be found.")
-
-
-def assign_routes():
-    """Considers availability of all Patient and number of Visit to book and allocates appropriately"""
-    pass

@@ -4,6 +4,7 @@
 import navigation
 from person import Patient, Clinician
 from visits import Visit
+from team import Team
 import geopy             # See details here: https://pypi.org/project/geopy/
 
 """
@@ -27,7 +28,7 @@ Secondary actions available:
 
 
 if __name__ == "__main__":
-    _class_list = [Patient, Clinician, Visit]
+    _class_list = [Patient, Clinician, Visit, Team]
 
     for cls in _class_list:
         cls.load_tracked_instances()
