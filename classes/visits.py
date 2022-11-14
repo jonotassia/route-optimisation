@@ -3,15 +3,15 @@ import pickle
 import itertools
 import validate
 import in_out
-from person import Patient
+import classes
 from datetime import datetime, date
 
 
 class Visit:
     visit_id_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
     tracked_instances = {}
-    c_sched_status = ("Unscheduled", "Scheduled", "No Show", "Cancelled")
-    c_cancel_reason = ("Clinician unavailable", "Patient unavailable", "No longer needed", "Expired", "System action")
+    _c_sched_status = ("unscheduled", "scheduled", "no show", "cancelled")
+    _c_cancel_reason = ("clinician unavailable", "patient unavailable", "no longer needed", "expired", "system action")
 
     def __init__(self, pat_id, status=1, sched_status="", address="", time_earliest="", time_latest="", exp_date=""):
         """Initializes a new request and links with pat_id. It contains the following attributes:
@@ -123,12 +123,12 @@ class Visit:
             return 0
 
         # Checks that sched status is scheduled using the schedule category list
-        elif self.sched_status == self.c_sched_status[1]:
+        elif self.sched_status == self._c_sched_status[1]:
             print("This request is already scheduled. Please cancel the appointment instead.")
             return 0
 
         else:
-            reason = validate.get_cat_value(self.c_cancel_reason, "Select a cancel reason. ")
+            reason = validate.get_cat_value(self._c_cancel_reason, "Select a cancel reason. ")
 
             prompt = "Are you sure you want to cancel this request? You will be unable to schedule this request."
             if validate.yes_or_no(prompt):
@@ -137,7 +137,7 @@ class Visit:
                 self.write_self()
 
                 # Remove visit from patient's list
-                patient = in_out.load_obj(Patient, f"./data/Patient/{self._pat_id}")
+                patient = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}")
                 patient.visits.remove(self._id)
                 patient.write_self()
 
@@ -156,7 +156,7 @@ class Visit:
                     # Evaluate date against current date and mark as expired if due before current date
                     if datetime.strptime(request.exp_date, '%m-%d-%Y').date() < date.today():
                         request.status = 0
-                        request.cancel_reason = cls.c_cancel_reason[3]
+                        request.cancel_reason = cls._c_cancel_reason[3]
                         cls.write_self(request)
 
             except FileNotFoundError as err:

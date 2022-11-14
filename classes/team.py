@@ -3,7 +3,7 @@ import pickle
 import itertools
 import validate
 import in_out
-from person import Patient, Clinician
+import classes
 
 
 class Team:
@@ -69,13 +69,13 @@ class Team:
                 # Remove team from patients and clinicians
                 if self._pat_id:
                     for pat_id in self._pat_id:
-                        pat = in_out.load_obj(Patient, f"./data/Patient/{pat_id}")
+                        pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{pat_id}")
                         pat.team = None
                         pat.write_self()
 
                 if self._clin_id:
                     for clin_id in self._clin_id:
-                        clin = in_out.load_obj(Clinician, f"./data/Clinician/{clin_id}")
+                        clin = in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{clin_id}")
                         clin.team = None
                         clin.write_self()
 

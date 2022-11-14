@@ -2,10 +2,10 @@
 # based on a geographic data, patient preferences, and clinician availability.
 # It will use geocoding from Nominatim: https://nominatim.org/
 import navigation
-from person import Patient, Clinician
-from visits import Visit
-from team import Team
-import geopy             # See details here: https://pypi.org/project/geopy/
+import validate
+from classes.person import Human, Patient, Clinician
+from classes.visits import Visit
+from classes.team import Team
 
 """
 Primary stream - sequence of events:
@@ -28,7 +28,7 @@ Secondary actions available:
 
 
 if __name__ == "__main__":
-    _class_list = [Patient, Clinician, Visit, Team]
+    _class_list = (Patient, Clinician, Visit, Team)
 
     for cls in _class_list:
         cls.load_tracked_instances()

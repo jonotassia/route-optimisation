@@ -2,7 +2,6 @@
 import pickle
 import pathlib
 from Levenshtein import ratio as levratio
-
 import validate
 
 

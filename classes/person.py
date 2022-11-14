@@ -2,11 +2,8 @@
 import itertools
 import validate
 import in_out
-import re
-
-from team import Team
-from visits import Visit
-from datetime import date, time
+import classes
+from datetime import datetime, time
 
 
 # TODO: Determine best way to generate Visits that are not tied to a date, but relative to days of week
@@ -15,7 +12,7 @@ from datetime import date, time
 class Human:
     _new_hum_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
     _tracked_instances = []
-    c_sex_options = ("male", "female", "not specified")
+    _c_sex_options = ("male", "female", "not specified")
 
     def __init__(self, status=1, first_name="", last_name="", middle_name="", dob="", sex="", address=""):
         """Initiates a human objects with the following attributes:
@@ -25,14 +22,13 @@ class Human:
         self.first_name = first_name
         self.last_name = last_name
         self.middle_name = middle_name
-        self.name = self.first_name + self.middle_name + self.last_name
+        self.name = [self.last_name, self.first_name, self.middle_name]
         self.dob = dob
         self.sex = sex
         self.address = address
 
         # TODO: Make team name a property so that it can dynamically pull team name from team id (ie networked)
         self._team_id = None
-        self._team_name = None
 
         self.write_self()
 
@@ -43,14 +39,12 @@ class Human:
     @dob.setter
     def dob(self, value):
         """Checks values of date of birth before assigning"""
-        match = re.search(r'^([0-9]{1,2})\\/([0-9]{1,2})\\/([0-9]{4})$', value)
-
         try:
-            value = date(match.group(3), match.group(2), match.group(1))
+            value = datetime.strptime(value, "%d/%m/%Y").date()
             self.dob = value
 
         except ValueError:
-            print("Please enter a valid date of birth in the format DD/MM/YYYY")
+            print("Please enter a valid date in the format DD/MM/YYYY.\n")
 
     @property
     def sex(self):
@@ -59,25 +53,101 @@ class Human:
     @sex.setter
     def sex(self, value):
         """Checks values of sex before assigning"""
-        if value.lower() in self.c_sex_options:
-            self.sex = self.c_sex_options
+        if value.lower() in self._c_sex_options:
+            self.sex = self._c_sex_options
         else:
-            raise ValueError(f"Invalid selection. value not in {self.c_sex_options}")
+            raise ValueError(f"Invalid selection. value not in {self._c_sex_options}")
 
     # TODO: add address with checks to list of class properties.
 
-    def set_demog(self):
-        while True:
-            self.first_name = validate.get_name()[0],
-            self.last_name = validate.get_name()[1],
-            self.middle_name = validate.get_name()[2],
-            self.dob = validate.get_date(date_of_birth=1),
-            self.sex = validate.get_sex(),
-            self.address = validate.get_address()
+    # TODO: Confirm team_name property is needed or if it can just be handled in the assign_team method
+    @property
+    def _team_name(self):
+        self._team_name = classes.team.Team.tracked_instances[self._team_id]["name"]
+        return self._team_name
 
+    @_team_name.setter
+    def _team_name(self, value):
+        if self._team_name != classes.team.Team.tracked_instances[value]["name"]:
+            self._team_name = classes.team.Team.tracked_instances[self._team_id]["name"]
+
+        else:
+            print("Value does not match ID of assigned team.")
+
+    def set_demog(self):
+        """
+        Loops through each basic demographic detail and assigns to the object.
+        If any response is blank, the user will be prompted to quit or continue.
+        If they continue, they will begin at the element that the quit out of
+        Once details are completed, the user is prompted to review information and complete creation.
+        :return:
+            1 if the user completes initialization
+            0 if the user does not
+        """
+        while True:
+
+            # Assign name
+            name = validate.get_name()
+
+            if name:
+                self.first_name = name[0]
+                self.last_name = name[1]
+                self.middle_name = name[2]
+                self.name = [self.last_name, self.first_name, self.middle_name]
+
+            else:
+                if validate.yes_or_no("You have left this information blank. Would you like to quit?"):
+                    continue
+
+                else:
+                    break
+
+            # Assign dob
+            dob = validate.get_date(date_of_birth=1)
+
+            if dob:
+                self.dob = dob
+
+            else:
+                if validate.yes_or_no("You have left this information blank. Would you like to quit?"):
+                    continue
+
+                else:
+                    break
+
+            # Assign sex
+            sex = validate.get_cat_value(self._c_sex_options, "Please select a sex from the list below: ")
+
+            if sex:
+                self.sex = sex
+
+            else:
+                if validate.yes_or_no("You have left this information blank. Would you like to quit?"):
+                    continue
+
+                else:
+                    break
+
+            # Assign address
+            address = validate.get_address()
+
+            if address:
+                self.address = validate.get_address()
+
+            else:
+                if validate.yes_or_no("You have left this information blank. Would you like to quit?"):
+                    continue
+
+                else:
+                    break
+
+            # If user confirms information is correct, a new object is created, written, and added to _tracked_instances
             if validate.confirm_info(self):
                 self.write_self()
                 return 1
+
+        print("Record not created.")
+        return 0
 
     def write_self(self):
         """Writes the object to file as a JSON using the pickle module"""
@@ -98,7 +168,7 @@ class Human:
 class Patient(Human):
     _new_pat_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
     _tracked_instances = []
-    _c_inactive_reason = ["No longer under care", "Expired", "Added in error"]
+    _c_inactive_reason = ("no longer under care", "expired", "added in error")
 
     def __init__(self, status=1, first_name="", last_name="", middle_name="", dob="", sex="", address=""):
         """
@@ -145,7 +215,7 @@ class Patient(Human):
         """Assigns the patient to a team so that they can be considered in that team's route calculation"""
         pass
 
-    def generate_request(self):
+    def generate_visit(self):
         """This method initializes and returns a request (class = Visit) for scheduling, which is written to file"""
         # TODO: Determine how to incorporate the concept of skills
         address = validate.get_address()
@@ -153,7 +223,7 @@ class Patient(Human):
         time_latest = validate.get_time()
         exp_date = validate.get_date()
 
-        new_request = Visit(self.id, address, time_earliest, time_latest, exp_date)
+        new_request = classes.visits.Visit(self.id, address, time_earliest, time_latest, exp_date)
         self.visits.append(new_request._id)
 
         return new_request
@@ -206,17 +276,17 @@ class Patient(Human):
 
                 # Cancel linked visit requests with a reason of system action
                 for visit_id in self.visits:
-                    visit = in_out.load_obj(Visit, f"./data/Visit/{visit_id}")
+                    visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}")
 
                     visit.status = 0
-                    visit.cancel_reason = visit.c_cancel_reason[4]
+                    visit.cancel_reason = visit._c_cancel_reason[4]
 
                     visit.write_self()
 
                     print("Visits successfully cancelled.")
 
                 # Remove from team
-                team = in_out.load_obj(Team, f"./data/Team/{self._team_id}")
+                team = in_out.load_obj(classes.team.Team, f"./data/Team/{self._team_id}")
                 team._pat_id.remove(self.id)
                 team.write_self()
 
@@ -232,7 +302,7 @@ class Patient(Human):
 class Clinician(Human):
     _clin_id_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
     _tracked_instances = {}
-    _c_inactive_reason = ["No longer works here", "Switched roles", "Added in error"]
+    _c_inactive_reason = ("no longer works here", "switched roles", "added in error")
 
     # TODO: Determine how to incorporate the concept of skills
     # TODO: Add licensure as an attribute
@@ -325,7 +395,7 @@ class Clinician(Human):
                 self.status = 0
 
                 # Remove from team
-                team = in_out.load_obj(Team, f"./data/Team/{self._team_id}")
+                team = in_out.load_obj(classes.team.Team, f"./data/Team/{self._team_id}")
                 team._clin_id.remove(self.id)
                 team.write_self()
 
@@ -336,3 +406,5 @@ class Clinician(Human):
                 print("Record successfully inactivated.")
 
                 return 1
+
+
