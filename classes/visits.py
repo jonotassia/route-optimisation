@@ -20,12 +20,12 @@ class Visit:
         self._pat_id = pat_id
         self._name = "Visit" + str(self._id)
         self._status = status
-        self.address = address
-        self.time_earliest = time_earliest
-        self.time_latest = time_latest
-        self.exp_date = exp_date
-        self.cancel_reason = None
-        self.sched_status = sched_status
+        self._address = address
+        self._time_earliest = time_earliest
+        self._time_latest = time_latest
+        self._exp_date = exp_date
+        self._cancel_reason = None
+        self._sched_status = sched_status
 
     @property
     def id(self):
@@ -41,7 +41,7 @@ class Visit:
 
     @status.setter
     def status(self, value):
-        """Checks values of sex before assigning"""
+        """Checks values of status before assigning"""
         try:
             if value == 1 or 0:
                 self.status = value
@@ -52,17 +52,108 @@ class Visit:
         except ValueError:
             print("Status can only be 0 or 1.")
 
+    @property
+    def address(self):
+        return self._address
+
+    @address.setter
+    def address(self, value):
+        """Checks values of date of birth before assigning"""
+        address = validate.valid_address(value)
+
+        if address:
+            self._address = address
+
+        else:
+            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+
+    @property
+    def time_earliest(self):
+        return self._time_earliest
+
+    @time_earliest.setter
+    def time_earliest(self, value):
+        """Checks values of time window start before assigning"""
+        time = validate.valid_time(value)
+
+        if time:
+            self._time_earliest = time
+
+        else:
+            raise ValueError("Please enter a valid time in the format HHMM.\n")
+
+    @property
+    def time_latest(self):
+        return self._time_latest
+
+    @time_latest.setter
+    def time_latest(self, value):
+        """Checks values of time window end before assigning"""
+        time = validate.valid_time(value)
+
+        if time:
+            self._time_latest = time
+
+        else:
+            raise ValueError("Please enter a valid time in the format HHMM.\n")
+
+    @property
+    def cancel_reason(self):
+        return self._cancel_reason
+
+    @cancel_reason.setter
+    def cancel_reason(self, value):
+        """Checks values of cancel reason before assigning"""
+        reason = validate.valid_cat_list(value, self._c_cancel_reason)
+
+        if reason:
+            self._cancel_reason = reason
+
+        else:
+            raise ValueError(f"Invalid selection. Value not in {self._c_cancel_reason}")
+
+    @property
+    def sched_status(self):
+        return self._sched_status
+
+    @sched_status.setter
+    def sched_status(self, value):
+        """Checks values of sched status before assigning"""
+        reason = validate.valid_cat_list(value, self._c_sched_status)
+
+        if reason:
+            self._sched_status = reason
+
+        else:
+            raise ValueError(f"Invalid selection. Value not in {self._c_sched_status}")
+
+    @property
+    def exp_date(self):
+        return self._exp_date
+
+    @exp_date.setter
+    def exp_date(self, value):
+        """Checks values of expected date before assigning"""
+        date = validate.valid_date(value)
+
+        if date:
+            self._exp_date = date
+
+        else:
+            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+
+
     def update_self(self):
         """Allows the user to update visit information, including date/time window or address
             Updates self.date, self.time_earliest, and self.time_latest. Writes updates to file.
             Returns 0 on successful update."""
 
         while True:
-            selection = input("What would you like to update:"
+            selection = validate.qu_input("What would you like to update:"
                               "     1. Visit Date and Time"
                               "     2. Visit Address")
 
-            if selection == "q" or "":
+            if not selection:
                 return 0
 
             # Update request date and time
@@ -123,6 +214,15 @@ class Visit:
 
     @classmethod
     def create_self(cls):
+        """
+        Object initialized from patient and adds to pat._visits. Loops through each detail and assigns to the object.
+        If any response is blank, the user will be prompted to quit or continue.
+        If they continue, they will begin at the element that the quit out of
+        Once details are completed, the user is prompted to review information and complete creation.
+        :return:
+            1 if the user completes initialization
+            0 if the user does not
+        """
         print("Please select a patient to create a visit request.")
         pat = classes.person.Patient.load_self()
         obj = pat.generate_request()

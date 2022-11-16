@@ -34,9 +34,9 @@ def main_menu(class_list):
 
         try:
 
-            selection = input("Selection: ")
+            selection = validate.qu_input("Selection: ")
 
-            if selection == "q" or not selection:
+            if not selection:
                 return 0
 
             elif selection == "1":
@@ -148,9 +148,9 @@ def inact_or_modify(obj):
               f"2) Delete\n")
 
         try:
-            selection = input("Option: ")
+            selection = validate.qu_input("Option: ")
 
-            if selection == "q" or not selection:
+            if not selection:
                 return 0
 
             elif int(selection) == 1:

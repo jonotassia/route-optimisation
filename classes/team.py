@@ -48,6 +48,21 @@ class Team:
     def pat_load(self):
         return len(self._pat_id)
 
+    @property
+    def address(self):
+        return self._address
+
+    @address.setter
+    def address(self, value):
+        """Checks values of date of birth before assigning"""
+        address = validate.valid_address(value)
+
+        if address:
+            self._address = address
+
+        else:
+            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+
     def update_self(self):
         """Allows the user to update team information"""
         pass
@@ -58,6 +73,15 @@ class Team:
 
     @classmethod
     def create_self(cls):
+        """
+        Loops through each detail and assigns to the object.
+        If any response is blank, the user will be prompted to quit or continue.
+        If they continue, they will begin at the element that the quit out of
+        Once details are completed, the user is prompted to review information and complete creation.
+        :return:
+            1 if the user completes initialization
+            0 if the user does not
+        """
         obj = cls()
 
         while True:

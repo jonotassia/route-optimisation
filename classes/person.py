@@ -14,18 +14,15 @@ class Human:
     _tracked_instances = {}
     _c_sex_options = ("male", "female", "not specified")
 
-    def __init__(self, status=1, first_name="", last_name="", middle_name="", dob="", sex="", address=""):
+    def __init__(self, status=1, name="", dob="", sex="", address=""):
         """Initiates a human objects with the following attributes:
         id, first name, last name, middle name, date of birth, sex, and address."""
         self._id = next(self._new_hum_iter)
         self._status = status
-        self.first_name = first_name
-        self.last_name = last_name
-        self.middle_name = middle_name
-        self._name = None
+        self._name = name
         self._dob = dob
         self._sex = sex
-        self.address = address
+        self._address = address
         self._team_id = None
         self._team_name = None
 
@@ -45,14 +42,36 @@ class Human:
                 self.status = value
 
             else:
-                raise ValueError
+                raise ValueError("Status can only be 0 or 1.")
 
-        except ValueError:
-            print("Status can only be 0 or 1.")
+        except ValueError as err:
+            print(err)
 
     @property
     def name(self):
-        return self.last_name, ", ", self.first_name, self.middle_name
+        return self.name[0], ",", self.name[1], self.name[2]
+
+    @name.setter
+    def name(self, value):
+        name = validate.valid_name(value)
+
+        if name:
+            self._name = name
+
+        else:
+            raise ValueError("Please provide a valid name in the format LAST, FIRST MIDDLE")
+
+    @property
+    def last_name(self):
+        return self.name[0]
+
+    @property
+    def first_name(self):
+        return self.name[1]
+
+    @property
+    def middle_name(self):
+        return self.name[2]
 
     @property
     def dob(self):
@@ -61,12 +80,13 @@ class Human:
     @dob.setter
     def dob(self, value):
         """Checks values of date of birth before assigning"""
-        try:
-            value = datetime.strptime(value, "%d/%m/%Y").date()
-            self.dob = value
+        dob = validate.valid_date(value)
 
-        except ValueError:
-            print("Please enter a valid date in the format DD/MM/YYYY.\n")
+        if dob:
+            self._dob = dob
+
+        else:
+            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
 
     @property
     def sex(self):
@@ -75,19 +95,29 @@ class Human:
     @sex.setter
     def sex(self, value):
         """Checks values of sex before assigning"""
-        try:
-            if value.lower() in self._c_sex_options:
-                self.sex = self._c_sex_options
+        sex = validate.valid_cat_list(value, self._c_sex_options)
 
-            else:
-                raise ValueError
+        if sex:
+            self._sex = sex
 
-        except ValueError:
-            print(f"Invalid selection. Value not in {self._c_sex_options}")
+        else:
+            raise ValueError(f"Invalid selection. Value not in {self._c_sex_options}")
 
-    # TODO: add address with checks to list of class properties.
+    @property
+    def address(self):
+        return self._address
 
-    # TODO: Confirm team_name property is needed or if it can just be handled in the assign_team method
+    @address.setter
+    def address(self, value):
+        """Checks values of date of birth before assigning"""
+        address = validate.valid_address(value)
+
+        if address:
+            self._address = address
+
+        else:
+            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+
     @property
     def team_name(self):
         self._team_name = classes.team.Team.tracked_instances[self._team_id]["name"]
@@ -96,7 +126,7 @@ class Human:
     @classmethod
     def create_self(cls):
         """
-        Loops through each basic demographic detail and assigns to the object.
+        Loops through each detail and assigns to the object.
         If any response is blank, the user will be prompted to quit or continue.
         If they continue, they will begin at the element that the quit out of
         Once details are completed, the user is prompted to review information and complete creation.
@@ -187,19 +217,64 @@ class Patient(Human):
     _tracked_instances = {}
     _c_inactive_reason = ("no longer under care", "expired", "added in error")
 
-    def __init__(self, status=1, first_name="", last_name="", middle_name="", dob="", sex="", address=""):
+    def __init__(self, status=1, name="", dob="", sex="", address=""):
         """
         Initiates and writes-to-file a patient with the following attributes:
         id, first name, last name, middle name, date of birth, sex, and address.
         Additionally, initializes a list of Visits linked to the patient
         """
-        super().__init__(status, first_name, last_name, middle_name, dob, sex, address)
+        super().__init__(status, name, dob, sex, address)
 
         self._id = next(self._new_pat_iter)
-        self.inactive_reason = None
-        self.visits = []
-        self.death_date = None
-        self.death_time = None
+        self._inactive_reason = None
+        self._visits = []
+        self._death_date = None
+        self._death_time = None
+
+    @property
+    def inactive_reason(self):
+        return self._inactive_reason
+
+    @inactive_reason.setter
+    def inactive_reason(self, value):
+        """Checks values of inactive reason before assigning"""
+        reason = validate.valid_cat_list(value, self._c_inactive_reason)
+
+        if reason:
+            self._inactive_reason = reason
+
+        else:
+            raise ValueError(f"Invalid selection. Value not in {self._c_inactive_reason}")
+
+    @property
+    def death_date(self):
+        return self._death_date
+
+    @death_date.setter
+    def death_date(self, value):
+        """Checks values of date of death before assigning"""
+        date = validate.valid_date(value)
+
+        if date:
+            self._death_date = date
+
+        else:
+            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+
+    @property
+    def death_time(self):
+        return self._death_time
+
+    @death_time.setter
+    def death_time(self, value):
+        """Checks values of date of time before assigning"""
+        time = validate.valid_time(value)
+
+        if time:
+            self._death_time = time
+
+        else:
+            raise ValueError("Please enter a valid time in the format HHMM.\n")
 
     def update_patient_address(self):
         """Updates the patient's address. Updates self.address. Writes updates to file.
@@ -235,7 +310,7 @@ class Patient(Human):
         # TODO: Determine how to incorporate the concept of skills
 
         new_visit = classes.visits.Visit(self.id)
-        self.visits.append(new_visit._id)
+        self._visits.append(new_visit._id)
 
         return new_visit
 
@@ -318,20 +393,95 @@ class Clinician(Human):
     # TODO: Determine how to incorporate the concept of skills
     # TODO: Add licensure as an attribute
 
-    def __init__(self, status=1, first_name="", last_name="", middle_name="", dob="", sex="", address=""):
+    def __init__(self, status=1, name="", dob="", sex="", address=""):
         """Initiates and writes-to-file a clinician with the following attributes:
         id, first name, last name, middle name, date of birth, sex, and address
         Assumes standard shift time for start and end time, and inherits address for start/end address.
         These will be updated by a different function called update_start_end"""
 
-        super().__init__(status, first_name, last_name, middle_name, dob, sex, address)
+        super().__init__(status, name, dob, sex, address)
 
         self._id = next(self._clin_id_iter)
-        self.start_address = address
-        self.end_address = address
-        self.start_time = time(9)
-        self.end_time = time(17)
-        self.inactive_reason = None
+        self._start_address = address
+        self._end_address = address
+        self._start_time = time(9)
+        self._end_time = time(17)
+        self._inactive_reason = None
+
+    @property
+    def inactive_reason(self):
+        return self._inactive_reason
+
+    @inactive_reason.setter
+    def inactive_reason(self, value):
+        """Checks values of inactive reason before assigning"""
+        reason = validate.valid_cat_list(value, self._c_inactive_reason)
+
+        if reason:
+            self._inactive_reason = reason
+
+        else:
+            raise ValueError(f"Invalid selection. Value not in {self._c_inactive_reason}")
+
+    @property
+    def start_address(self):
+        return self._start_address
+
+    @start_address.setter
+    def start_address(self, value):
+        """Checks values of date of birth before assigning"""
+        address = validate.valid_address(value)
+
+        if address:
+            self._start_address = address
+
+        else:
+            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+
+    @property
+    def end_address(self):
+        return self._end_address
+
+    @end_address.setter
+    def end_address(self, value):
+        """Checks values of date of birth before assigning"""
+        address = validate.valid_address(value)
+
+        if address:
+            self._end_address = address
+
+        else:
+            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+
+    @property
+    def start_time(self):
+        return self._start_time
+
+    @start_time.setter
+    def start_time(self, value):
+        """Checks values of start time before assigning"""
+        time = validate.valid_time(value)
+
+        if time:
+            self._start_time = time
+
+        else:
+            raise ValueError("Please enter a valid time in the format HHMM.\n")
+
+    @property
+    def end_time(self):
+        return self._end_time
+
+    @end_time.setter
+    def end_time(self, value):
+        """Checks values of end time before assigning"""
+        time = validate.valid_time(value)
+
+        if time:
+            self._end_time = time
+
+        else:
+            raise ValueError("Please enter a valid time in the format HHMM.\n")
 
     def assign_team(self):
         """Assigns the clinician to a team so that they can be considered in that team's route calculation"""

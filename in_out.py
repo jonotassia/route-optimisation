@@ -35,10 +35,10 @@ def get_obj(cls):
 
     while True:
         obj_id = 0
-        obj = input("Name or ID: ")
+        obj = validate.qu_input("Name or ID: ")
 
         # Quit if q or blank is entered
-        if obj == 'q' or not obj:
+        if not obj:
             return 0
 
         # Prompt and flag for including inactive records
@@ -99,7 +99,6 @@ def load_tracked_obj(cls):
         else:
             cls._tracked_instances[obj._id] = {"status": obj.status,
                                                "name": obj.name}
-
 
     except FileNotFoundError:
         print(f"{cls.__qualname__} could not be found.")
