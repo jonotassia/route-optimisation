@@ -5,36 +5,58 @@ import in_out
 import classes
 from datetime import datetime, time
 
-
 # TODO: Determine best way to generate Visits that are not tied to a date, but relative to days of week
 
 
 class Human:
-    _new_hum_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
-    _tracked_instances = []
+    # TODO: Save ID iterable so it can be pulled when programme initializes
+    _new_hum_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
+    _tracked_instances = {}
     _c_sex_options = ("male", "female", "not specified")
 
     def __init__(self, status=1, first_name="", last_name="", middle_name="", dob="", sex="", address=""):
         """Initiates a human objects with the following attributes:
         id, first name, last name, middle name, date of birth, sex, and address."""
         self._id = next(self._new_hum_iter)
-        self.status = status
+        self._status = status
         self.first_name = first_name
         self.last_name = last_name
         self.middle_name = middle_name
-        self.name = [self.last_name, self.first_name, self.middle_name]
-        self.dob = dob
-        self.sex = sex
+        self._name = None
+        self._dob = dob
+        self._sex = sex
         self.address = address
-
-        # TODO: Make team name a property so that it can dynamically pull team name from team id (ie networked)
         self._team_id = None
+        self._team_name = None
 
-        self.write_self()
+    @property
+    def id(self):
+        return self._id
+
+    @property
+    def status(self):
+        return self._status
+
+    @status.setter
+    def status(self, value):
+        """Checks values of sex before assigning"""
+        try:
+            if value == 1 or 0:
+                self.status = value
+
+            else:
+                raise ValueError
+
+        except ValueError:
+            print("Status can only be 0 or 1.")
+
+    @property
+    def name(self):
+        return self.last_name, ", ", self.first_name, self.middle_name
 
     @property
     def dob(self):
-        return self.dob
+        return self._dob
 
     @dob.setter
     def dob(self, value):
@@ -48,33 +70,31 @@ class Human:
 
     @property
     def sex(self):
-        return self.sex
+        return self._sex
 
     @sex.setter
     def sex(self, value):
         """Checks values of sex before assigning"""
-        if value.lower() in self._c_sex_options:
-            self.sex = self._c_sex_options
-        else:
-            raise ValueError(f"Invalid selection. value not in {self._c_sex_options}")
+        try:
+            if value.lower() in self._c_sex_options:
+                self.sex = self._c_sex_options
+
+            else:
+                raise ValueError
+
+        except ValueError:
+            print(f"Invalid selection. Value not in {self._c_sex_options}")
 
     # TODO: add address with checks to list of class properties.
 
     # TODO: Confirm team_name property is needed or if it can just be handled in the assign_team method
     @property
-    def _team_name(self):
+    def team_name(self):
         self._team_name = classes.team.Team.tracked_instances[self._team_id]["name"]
         return self._team_name
 
-    @_team_name.setter
-    def _team_name(self, value):
-        if self._team_name != classes.team.Team.tracked_instances[value]["name"]:
-            self._team_name = classes.team.Team.tracked_instances[self._team_id]["name"]
-
-        else:
-            print("Value does not match ID of assigned team.")
-
-    def set_demog(self):
+    @classmethod
+    def create_self(cls):
         """
         Loops through each basic demographic detail and assigns to the object.
         If any response is blank, the user will be prompted to quit or continue.
@@ -84,67 +104,64 @@ class Human:
             1 if the user completes initialization
             0 if the user does not
         """
-        while True:
+        # TODO: Use a dictionary to loop through attributes to set in a separate function
+        obj = cls()
 
+        while True:
             # Assign name
             name = validate.get_name()
 
             if name:
-                self.first_name = name[0]
-                self.last_name = name[1]
-                self.middle_name = name[2]
-                self.name = [self.last_name, self.first_name, self.middle_name]
+                obj.first_name = name[0]
+                obj.last_name = name[1]
+                obj.middle_name = name[2]
 
             else:
-                if validate.yes_or_no("You have left this information blank. Would you like to quit?"):
-                    continue
-
-                else:
+                if not validate.yes_or_no("You have left this information blank. Would you like to quit?"):
                     break
 
             # Assign dob
             dob = validate.get_date(date_of_birth=1)
 
             if dob:
-                self.dob = dob
+                obj._dob = dob
 
             else:
-                if validate.yes_or_no("You have left this information blank. Would you like to quit?"):
-                    continue
-
-                else:
+                if not validate.yes_or_no("You have left this information blank. Would you like to quit?"):
                     break
 
             # Assign sex
-            sex = validate.get_cat_value(self._c_sex_options, "Please select a sex from the list below: ")
+            sex = validate.get_cat_value(cls._c_sex_options, "Please select a sex from the list below: ")
 
             if sex:
-                self.sex = sex
+                obj._sex = sex
 
             else:
-                if validate.yes_or_no("You have left this information blank. Would you like to quit?"):
-                    continue
-
-                else:
+                if not validate.yes_or_no("You have left this information blank. Would you like to quit?"):
                     break
 
             # Assign address
             address = validate.get_address()
 
             if address:
-                self.address = validate.get_address()
+                obj.address = address
 
             else:
-                if validate.yes_or_no("You have left this information blank. Would you like to quit?"):
-                    continue
-
-                else:
+                if not validate.yes_or_no("You have left this information blank. Would you like to quit?"):
                     break
 
+            detail_dict = {
+                "First Name": obj.first_name,
+                "Middle Name": obj.middle_name,
+                "Last Name": obj.last_name,
+                "Date of Birth": obj.dob,
+                "Sex": obj.sex,
+                "Address": obj.address
+            }
+
             # If user confirms information is correct, a new object is created, written, and added to _tracked_instances
-            if validate.confirm_info(self):
-                self.write_self()
-                return 1
+            if validate.confirm_info(obj, detail_dict):
+                return obj
 
         print("Record not created.")
         return 0
@@ -166,8 +183,8 @@ class Human:
 
 
 class Patient(Human):
-    _new_pat_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
-    _tracked_instances = []
+    _new_pat_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
+    _tracked_instances = {}
     _c_inactive_reason = ("no longer under care", "expired", "added in error")
 
     def __init__(self, status=1, first_name="", last_name="", middle_name="", dob="", sex="", address=""):
@@ -178,13 +195,11 @@ class Patient(Human):
         """
         super().__init__(status, first_name, last_name, middle_name, dob, sex, address)
 
-        self.id = next(self._new_pat_iter)
+        self._id = next(self._new_pat_iter)
         self.inactive_reason = None
         self.visits = []
         self.death_date = None
         self.death_time = None
-
-        self.write_self()
 
     def update_patient_address(self):
         """Updates the patient's address. Updates self.address. Writes updates to file.
@@ -218,15 +233,11 @@ class Patient(Human):
     def generate_visit(self):
         """This method initializes and returns a request (class = Visit) for scheduling, which is written to file"""
         # TODO: Determine how to incorporate the concept of skills
-        address = validate.get_address()
-        time_earliest = validate.get_time()
-        time_latest = validate.get_time()
-        exp_date = validate.get_date()
 
-        new_request = classes.visits.Visit(self.id, address, time_earliest, time_latest, exp_date)
-        self.visits.append(new_request._id)
+        new_visit = classes.visits.Visit(self.id)
+        self.visits.append(new_visit._id)
 
-        return new_request
+        return new_visit
 
     def get_requests(self):
         pass
@@ -300,7 +311,7 @@ class Patient(Human):
 
 
 class Clinician(Human):
-    _clin_id_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
+    _clin_id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
     _tracked_instances = {}
     _c_inactive_reason = ("no longer works here", "switched roles", "added in error")
 
@@ -315,14 +326,12 @@ class Clinician(Human):
 
         super().__init__(status, first_name, last_name, middle_name, dob, sex, address)
 
-        self.id = next(self._clin_id_iter)
+        self._id = next(self._clin_id_iter)
         self.start_address = address
         self.end_address = address
         self.start_time = time(9)
         self.end_time = time(17)
         self.inactive_reason = None
-
-        self.write_self()
 
     def assign_team(self):
         """Assigns the clinician to a team so that they can be considered in that team's route calculation"""

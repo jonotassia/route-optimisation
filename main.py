@@ -1,4 +1,4 @@
-# This programme will use a feed from a geolocation API to determine the ideal route for Clinicians to Patient homes
+# This programme will use a feed from a geolocation API to determine the ideal route for Clinician to Patient homes
 # based on a geographic data, patient preferences, and clinician availability.
 # It will use geocoding from Nominatim: https://nominatim.org/
 import navigation
@@ -9,10 +9,10 @@ from classes.team import Team
 
 """
 Primary stream - sequence of events:
-- Generate list of Clinicians
+- Generate list of Clinician
 - Generate list of Patient
 - Generate list of Visits each day (networked to a patient via ID)
-- Calculate real distances between Clinicians and Visits
+- Calculate real distances between Clinician and Visits
 - Evaluate all permutations of routes and select optimal route
 
 Secondary actions available:
@@ -30,8 +30,8 @@ Secondary actions available:
 if __name__ == "__main__":
     _class_list = (Patient, Clinician, Visit, Team)
 
-    for cls in _class_list:
-        cls.load_tracked_instances()
+    # for cls in _class_list:
+    #     cls.load_tracked_instances()
 
     navigation.main_menu(_class_list)
 

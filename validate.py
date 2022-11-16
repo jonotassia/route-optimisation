@@ -1,5 +1,21 @@
-# This file contains functions to gather demographic information on Patient and Clinicians
+# This file contains functions to gather demographic information on Patient and Clinician
 from datetime import datetime
+from Levenshtein import ratio as levratio
+
+
+def yes_or_no(prompt):
+    """Validates a user's input as yes (return 1) or no (return 0)."""
+    while True:
+        confirm = input(prompt).lower()
+
+        if confirm == "q" or not confirm:
+            return 0
+
+        elif confirm == ("n" or "no"):
+            return 0
+
+        elif confirm == ("y" or "yes"):
+            return 1
 
 
 def get_date(date_of_birth=0):
@@ -97,18 +113,6 @@ def get_time():
                 print("Invalid Time. Please enter in the format HHMM.\n")
 
 
-def yes_or_no(prompt):
-    """Validates a user's input as yes (return 1) or no (return 0)."""
-    while True:
-        confirm = input(prompt).lower()
-
-        if confirm == "y" or "yes":
-            return 1
-
-        elif confirm == "n" or "no":
-            return 0
-
-
 def get_cat_value(cat_list, prompt):
     """
     Takes a category list and prompt as a parameter. Validates that the input from a user is in the category list.
@@ -138,15 +142,73 @@ def get_cat_value(cat_list, prompt):
             print("Invalid selection.")
 
 
-def confirm_info(obj):
-    """This function will be used to confirm information for any object that is created
-     from a class instance."""
+def confirm_info(obj, detail_dict):
+    """
+    This function will be used to confirm information for any object that is created from a class instance.
+    It loops through the passed dictionary to display relevant parameters.
+    :param obj: Object - used to guide prompt.
+    :param detail_dict: Includes the details which you would like to display to the user.
+    :return: 1 if change is approved, else None
+    """
 
-    print(f"A {type(obj).__name__} with the following details will be created: ")
+    print(f"\nA {type(obj).__name__} with the following details will be created: ")
 
-    for k, v in vars(obj).items():
+    for k, v in detail_dict.items():
         print(f"{k}: {v}")
 
     if yes_or_no("Confirm the change to proceed (Y/N): "):
         return 1
 
+
+def validate_obj_by_name(cls, obj, inc_inac=0):
+    print("Please enter the index or ID of the correct match below:")
+    match_list = []
+
+    for dict_id, val in cls._tracked_instances.items():
+        # If flag set for hiding inactive and record is inactive, ignore
+        if not inc_inac and not val["id"] == 0:
+            continue
+
+        # Measure similarity by levenshtein distance and prompt user to confirm details.
+        # Append ID to match list for user validation
+        elif levratio(val["name"], obj) > 0.8:
+            match_list.append([dict_id, val['name'], val['dob']])
+
+    # Print list of potential matches for user to select from
+    if match_list:
+        for count, match in enumerate(match_list):
+            print(f"{count}) ID: {match[0]} Name: {match[1]}, DOB: {match[2]}")
+
+    else:
+        print("No records found matching those details.")
+        return 0
+
+    # Prompt user to select option from above
+    while True:
+        try:
+            selection = input("Select an index number or enter an ID from above: ")
+
+            # Quit if q or blank is entered
+            if selection == 'q' or not selection:
+                return 0
+
+            selection = int(selection)
+
+            # Masterfile IDs begin after 10000, so if number under that range, it will select as an index
+            if selection in match_list and selection > 9999:
+                obj = selection
+                return obj
+
+            elif selection in len(match_list):
+                obj = match_list[selection]
+                return obj
+
+            # Prompt user to break if record does not exist
+            else:
+                print("Record does not exist.")
+
+                if not yes_or_no("Continue with selection? "):
+                    return 0
+
+        except TypeError:
+            print("Response must be a number.")

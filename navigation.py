@@ -1,10 +1,10 @@
 # This file contains functions to be used in the creating the GUI.
 # Stick with TUI for now, but launch completed map into web-browser or GUI
-
+import classes.person
 import validate
 import os
-import sys
 from classes.person import Patient
+from classes.team import Team
 from classes.visits import Visit
 
 
@@ -39,12 +39,12 @@ def main_menu(class_list):
             if selection == "q" or not selection:
                 return 0
 
-            elif int(selection) == 1:
+            elif selection == "1":
                 geo_feat()
                 continue
 
-            elif int(selection) == 2:
-                class_selection(class_list)
+            elif selection == "2":
+                obj_menu(class_list)
                 continue
 
             else:
@@ -54,49 +54,90 @@ def main_menu(class_list):
             print("Please select an option by number from the list above.\n")
 
 
-def class_selection(class_list):
+def obj_menu(class_list):
+    """
+    Prompts user for a class to enter, then asks for an object name or ID.
+    If it exists, moves them to the modify or inactivate function.
+    If it does not, prompts them to create a new object.
+    :param class_list: List of classes. Inherited from main function
+    :return: None
+    """
     while True:
         clear()
 
-        # Prepare list of classes as strings to pass through to get_cat_value
-        selection_list = [cat.__name__ for cat in class_list]
+        # Prompt user for the class they want to modify/create
+        cls = class_selection(class_list)
 
-        prompt = "Which type of record would you like to create/modify?"
-        selection = validate.get_cat_value(selection_list, prompt)
+        if not cls:
+            if validate.yes_or_no("Select a new class? "):
+                continue
 
-        if selection:
-            # Convert selection back to the class object by using the matching index in the string list
-            selection = class_list[selection_list.index(selection)]
+            else:
+                return 0
 
-            # TODO: Next test
-            # Prompt user for record name or id to load
-            obj = selection.load_self()
+        while True:
+            # Prompt user for object details and load object
+            obj = cls.load_self()
 
-            # If record exists, prompt user to modify or delete.
+            # If object exists, send user to modification screen
             if obj:
                 inact_or_modify(obj)
 
-            # If record does not exist, prompt user if they'd like to create one.
+            # If object does not exist, prompt user to create object as appropriate based on class.
             else:
-                if validate.yes_or_no("Create a new record? "):
+                create_object_director(cls)
 
-                    # For visits, a patient will need to be loaded in order to link it.
-                    if selection == Visit:
-                        print("Please select a patient to create a visit request.")
-                        obj = Patient.load_self()
-                        obj.generate_request()
+            if not validate.yes_or_no("Search for another object? "):
+                return 0
 
-                    # Initialize a new instance of selected Human subclass and assign attributes
-                    else:
-                        obj = selection()
-                        obj.set_demog()
-            continue
 
-        else:
-            return 0
+def class_selection(class_list):
+    """
+    Prompts user to select a class.
+    :param class_list: List of classes. Inherited from main function
+    :return: The class the user selected, or 0 if quit
+    """
+    # Prepare list of classes as strings to pass through to get_cat_value
+    selection_list = [cat.__name__ for cat in class_list]
+
+    prompt = "Which type of record would you like to create/modify?"
+    selection = validate.get_cat_value(selection_list, prompt)
+
+    if selection:
+        # Convert selection back to the class object by using the matching index in the string list
+        selection = class_list[selection_list.index(selection)]
+
+        return selection
+
+    else:
+        return 0
+
+
+def create_object_director(cls):
+    """
+    Directs the system to create a new record based on its class.
+    :param cls: Class of object to be created.
+    :return: None
+    """
+    clear()
+    print(f"Record Type: {cls.__qualname__}".center(40))
+
+    cont = validate.yes_or_no("\nCreate a new record? ")
+
+    if cont:
+        obj = cls.create_self()
+
+        if obj:
+            cls.write_self()
 
 
 def inact_or_modify(obj):
+    """
+    Prompts the user whether they would like to inactivate or modify a record.
+    The function that is loaded is based on the class of the object that is passed as an attribute.
+    :param obj: The object that the user would like to modify.
+    :return: None
+    """
     while True:
         clear()
         print(f"ID: {obj._id} \n"
@@ -123,6 +164,9 @@ def inact_or_modify(obj):
 
         except TypeError:
             print("Please select an option by number from the list above.\n")
+
+        if not validate.yes_or_no("Further modifications required? "):
+            return 0
 
 
 def geo_feat():

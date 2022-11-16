@@ -8,7 +8,7 @@ from datetime import datetime, date
 
 
 class Visit:
-    visit_id_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
+    visit_id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
     tracked_instances = {}
     _c_sched_status = ("unscheduled", "scheduled", "no show", "cancelled")
     _c_cancel_reason = ("clinician unavailable", "patient unavailable", "no longer needed", "expired", "system action")
@@ -19,7 +19,7 @@ class Visit:
         self._id = next(self.visit_id_iter)
         self._pat_id = pat_id
         self._name = "Visit" + str(self._id)
-        self.status = status
+        self._status = status
         self.address = address
         self.time_earliest = time_earliest
         self.time_latest = time_latest
@@ -27,7 +27,30 @@ class Visit:
         self.cancel_reason = None
         self.sched_status = sched_status
 
-        self.write_self()
+    @property
+    def id(self):
+        return self._id
+
+    @property
+    def name(self):
+        return "Visit" + str(self._id)
+
+    @property
+    def status(self):
+        return self._status
+
+    @status.setter
+    def status(self, value):
+        """Checks values of sex before assigning"""
+        try:
+            if value == 1 or 0:
+                self.status = value
+
+            else:
+                raise ValueError
+
+        except ValueError:
+            print("Status can only be 0 or 1.")
 
     def update_self(self):
         """Allows the user to update visit information, including date/time window or address
@@ -99,6 +122,69 @@ class Visit:
         in_out.write_obj(self)
 
     @classmethod
+    def create_self(cls):
+        print("Please select a patient to create a visit request.")
+        pat = classes.person.Patient.load_self()
+        obj = pat.generate_request()
+
+        while True:
+            # Assign address
+            address = validate.get_address()
+
+            if address:
+                obj.address = address
+
+            else:
+                if not validate.yes_or_no("You have left this information blank. Would you like to quit?"):
+                    break
+
+            # Assign expected date
+            exp_date = validate.get_date()
+
+            if exp_date:
+                obj.exp_date = exp_date
+
+            else:
+                if not validate.yes_or_no("You have left this information blank. Would you like to quit?"):
+                    break
+
+            # Assign start time window
+            time_earliest = validate.get_time()
+
+            if time_earliest:
+                obj.time_earliest = time_earliest
+
+            else:
+                if not validate.yes_or_no("You have left this information blank. Would you like to quit?"):
+                    break
+
+            # Assign start time window
+            time_latest = validate.get_time()
+
+            if time_latest:
+                obj.time_latest = time_latest
+
+            else:
+                if not validate.yes_or_no("You have left this information blank. Would you like to quit?"):
+                    break
+
+            detail_dict = {
+                "Visit Address": address,
+                "Expected Date": exp_date,
+                "Window Start": time_earliest,
+                "Window End": time_latest
+            }
+
+            # If user confirms information is correct, a new object is created, written, and added to _tracked_instances
+            if validate.confirm_info(obj, detail_dict):
+                pat.write_self()
+                return obj
+
+        print("Record not created.")
+        return 0
+
+
+    @classmethod
     def load_self(cls):
         """Class method to initialise the object from file. Returns the object"""
         in_out.get_obj(cls)
@@ -150,7 +236,7 @@ class Visit:
         """Evaluates all Visits and marks them as no shows if they are past their expected date"""
         for instance in cls.tracked_instances:
             try:
-                async with open(f"./data/{type(cls).__name__}/{instance['id']}", "rb") as read_file:
+                async with open(f"./data/{cls.__qualname__}/{instance['id']}", "rb") as read_file:
                     request = pickle.load(read_file)
 
                     # Evaluate date against current date and mark as expired if due before current date

@@ -1,5 +1,4 @@
 # This file contains the Visit class to be used in the route optimisation tool.
-import pickle
 import itertools
 import validate
 import in_out
@@ -7,21 +6,47 @@ import classes
 
 
 class Team:
-    team_id_iter = itertools.count()  # Create a counter to assign new value each time a new obj is created
+    team_id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
     tracked_instances = {}
 
-    def __init__(self, status=1, name=None):
+    def __init__(self, status=1, name=None, address=None):
         """Initializes a new request and links with pat_id. It contains the following attributes:
             req_id, pat_id, name, status, address, the earliest time, latest time, sched status, and cancel_reason"""
         self._id = next(self.team_id_iter)
         self.name = name
-        self.status = status
+        self._status = status
         self._pat_id = []
         self._clin_id = []
-        self.size = len(self._clin_id)
-        self.pat_load = len(self._pat_id)
+        self.address = address
 
-        self.write_self()
+    @property
+    def id(self):
+        return self._id
+
+    @property
+    def status(self):
+        return self._status
+
+    @status.setter
+    def status(self, value):
+        """Checks values of sex before assigning"""
+        try:
+            if value == 1 or 0:
+                self.status = value
+
+            else:
+                raise ValueError
+
+        except ValueError:
+            print("Status can only be 0 or 1.")
+
+    @property
+    def size(self):
+        return len(self._clin_id)
+
+    @property
+    def pat_load(self):
+        return len(self._pat_id)
 
     def update_self(self):
         """Allows the user to update team information"""
@@ -30,6 +55,40 @@ class Team:
     def write_self(self):
         """Writes the object to file as a JSON using the pickle module"""
         in_out.write_obj(self)
+
+    @classmethod
+    def create_self(cls):
+        obj = cls()
+
+        while True:
+            # Assign name
+            name = input("Name: ")
+
+            if name:
+                obj.name = name
+
+            else:
+                if not validate.yes_or_no("You have left this information blank. Would you like to quit?"):
+                    break
+
+            # Assign address
+            address = validate.get_address()
+
+            if address:
+                obj.address = address
+
+            else:
+                if not validate.yes_or_no("You have left this information blank. Would you like to quit?"):
+                    break
+
+            detail_dict = {
+                "First Name": obj.name,
+                "Address": obj.address
+            }
+
+            # If user confirms information is correct, a new object is created, written, and added to _tracked_instances
+            if validate.confirm_info(obj, detail_dict):
+                return obj
 
     @classmethod
     def load_self(cls):

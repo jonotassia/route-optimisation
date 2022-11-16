@@ -1,22 +1,30 @@
 # This file contains various functions to be used in the route optimisation tool.
 import pickle
 import pathlib
-from Levenshtein import ratio as levratio
 import validate
+import classes
 
 
 def write_obj(obj):
-    """Writes the object to file as a JSON using the pickle module"""
-    with open(f"./data/{obj.__class__.__name__}/{obj._id}", "wb") as file:
+    """
+    Writes the object to file as a JSON using the pickle module
+    Adds/updates the tracked instances class attribute
+    """
+    with open(f"./data/{obj.__class__.__name__}/{obj._id}.pkl", "wb") as file:
         pickle.dump(obj, file)
 
-    # if object does not exist within the tracked_instances dictionary, append.
-    if obj._tracked_instances[obj._id]:
-        print(f"{obj.__class__.__name__} successfully saved.")
+    # Update tracked instance dictionary with new value (overwrites old values). Varies type of object.
+    if isinstance(obj, classes.person.Human):
+        obj._tracked_instances[obj._id] = {"status": obj.status,
+                                            "name": obj._name,
+                                           "dob": obj.dob,
+                                           "sex": obj.sex}
 
     else:
-        obj._tracked_instances[obj._id] = {"name": obj.name,
-                                           "dob": obj.dob}
+        obj._tracked_instances[obj._id] = {"status": obj.status,
+                                            "name": obj._name}
+
+    print(f"{obj.__class__.__name__} successfully saved.\n")
 
 
 def get_obj(cls):
@@ -25,62 +33,38 @@ def get_obj(cls):
     Prompts user to include inactive records as well.
     """
 
-    obj_id = input("Name or ID: ")
+    while True:
+        obj_id = 0
+        obj = input("Name or ID: ")
 
-    if validate.yes_or_no("Include inactive? "):
-        inc_inac = True
-
-    else:
-        inc_inac = False
-
-    # If not an id, search for instance in self.tracked_instances
-    if obj_id.isalpha():
-        print("Please enter the index or ID of the correct match below:")
-        match_list = []
-
-        for dict_id, val in cls._tracked_instances.items():
-            # If flag set for hiding inactive and record is inactive, ignore
-            if not inc_inac and not val["id"] == 0:
-                continue
-
-            # Measure similarity by levenshtein distance and prompt user to confirm details.
-            # Append ID to match list for user validation
-            elif levratio(val["name"], obj_id) > 0.8:
-                match_list.append([dict_id, val['name'], val['dob']])
-
-        if match_list:
-            for count, match in enumerate(match_list):
-                print(f"{count}) ID: {match[0]} Name: {match[1]}, DOB: {match[2]}")
-
-        else:
-            print("No records found matching those details.")
+        # Quit if q or blank is entered
+        if obj == 'q' or not obj:
             return 0
 
-        while True:
-            try:
-                selection = int(input("Select an index number or enter an ID frome above: "))
+        # Prompt and flag for including inactive records
+        inc_inac = True if validate.yes_or_no("Include inactive? ") else False
 
-                # Masterfile IDs begin after 10000, so if number under that range, it will select as an index
-                if selection in match_list and selection > 9999:
-                    obj_id = selection
-                    break
+        # If not an id, search for instance in self.tracked_instances
+        if obj.isnumeric():
+            obj_id = obj
+            break
 
-                elif selection in len(match_list):
-                    obj_id = match_list[selection]
-                    break
+        elif obj.isalpha():
+            obj_id = validate.validate_obj_by_name(cls, obj, inc_inac=inc_inac)
+            break
 
-                # Prompt user to break if record does not exist
-                else:
-                    print("Record does not exist.")
+        else:
+            print("Invalid response.")
+            continue
 
-                    if not validate.yes_or_no("Continue with selection? "):
-                        return 0
-
-            except TypeError:
-                continue
-
-        file = f"./data/{cls.__class__.__name__}/{obj_id}"
+    # Generate and return object of class that is passed as argument
+    if obj_id:
+        file = f"./data/{cls.__qualname__}/{obj_id}.pkl"
         return load_obj(cls, file)
+
+    else:
+        print("Record not found.")
+        return 0
 
 
 def load_obj(cls, file_path):
@@ -89,25 +73,41 @@ def load_obj(cls, file_path):
         with open(file_path, "rb") as file:
             obj = pickle.load(file)
 
-        print(f"{cls.__class__.__name__} successfully loaded.")
+        print(f"{cls.__qualname__} successfully loaded.")
         return obj
 
     except FileNotFoundError:
-        print(f"{cls.__class__.__name__} could not be found.")
+        print(f"{cls.__qualname__} could not be found.")
 
 
 def load_tracked_obj(cls):
     """Class method to initialise all instances of a class from file. Modifies the class attribute tracked_instances.
         This is uses to allow for quick searching by name, date of birth, and ID"""
-    # TODO: Determine if there is a way to remove name and dob dynamically for requests
-
+    # TODO: Convert to a pull from a set of text files rather than reading each individual object file.
+    obj = None
     try:
-        file_path = pathlib.Path(f"./data/{cls.__name__}").glob("*.txt")
+        file_path = pathlib.Path(f"./data/{cls.__qualname__}.pkl").glob("*.pkl")
         for file in file_path:
             obj = load_obj(cls, file)
-            cls._tracked_instances[obj.id] = {"status": obj.status,
-                                              "name": obj.name,
-                                              "dob": obj.name}
+
+        # Update tracked instance dictionary with new value (overwrites old values).
+        if isinstance(cls, classes.person.Human):
+            cls._tracked_instances[obj._id] = {"status": obj.status,
+                                               "name": obj.name,
+                                               "dob": obj.dob}
+
+        else:
+            cls._tracked_instances[obj._id] = {"status": obj.status,
+                                               "name": obj.name}
+
 
     except FileNotFoundError:
-        print(f"{cls.__name__} could not be found.")
+        print(f"{cls.__qualname__} could not be found.")
+
+
+def save_variables():
+    """
+    Saves each of the instance tracking and id counter variables when powering down.
+    :return: None
+    """
+    pass
