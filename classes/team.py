@@ -84,35 +84,39 @@ class Team:
         """
         obj = cls()
 
-        while True:
-            # Assign name
-            name = input("Name: ")
-
-            if name:
-                obj.name = name
-
-            else:
-                if not validate.yes_or_no("You have left this information blank. Would you like to quit?"):
-                    break
-
-            # Assign address
-            address = validate.get_address()
-
-            if address:
-                obj.address = address
-
-            else:
-                if not validate.yes_or_no("You have left this information blank. Would you like to quit?"):
-                    break
-
-            detail_dict = {
-                "First Name": obj.name,
-                "Address": obj.address
+        attr_list = [
+            {
+                "term": "Name",
+                "attr": obj.name
+            },
+            {
+                "term": "Address",
+                "attr": obj.address
             }
+        ]
 
-            # If user confirms information is correct, a new object is created, written, and added to _tracked_instances
-            if validate.confirm_info(obj, detail_dict):
-                return obj
+        # Update all attributes from above. Quit if user quits during any attribute
+        if not validate.get_info(obj, attr_list):
+            return 0
+
+        detail_dict = {
+            "ID": obj.id,
+            "Name": obj.name,
+            "Address": obj.address
+        }
+
+        # If user confirms information is correct, a new object is created, written, and added to _tracked_instances
+        if not validate.confirm_info(obj, detail_dict):
+            print("Record not created.")
+            return 0
+
+        obj.write_self()
+        return obj
+
+    def refresh_self(self):
+        """Refreshes an existing object from file in the in case users need to back out changes. Returns the object"""
+        print("Reverting changes...")
+        in_out.load_obj(self, f"./data/{self.__class__.__name__}/{self.id}.pkl")
 
     @classmethod
     def load_self(cls):

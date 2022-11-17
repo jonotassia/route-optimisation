@@ -17,15 +17,18 @@ def qu_input(prompt):
 def yes_or_no(prompt):
     """Validates a user's input as yes (return 1) or no (return 0)."""
     while True:
-        confirm = qu_input(prompt).lower()
+        confirm = qu_input(prompt)
 
         if not confirm:
             return 0
 
-        elif confirm == ("n" or "no"):
+        if confirm.isnumeric():
+            print('Please enter "yes" or "no".')
+
+        elif confirm.lower() == ("n" or "no"):
             return 0
 
-        elif confirm == ("y" or "yes"):
+        elif confirm.lower() == ("y" or "yes"):
             return 1
 
 
@@ -47,11 +50,11 @@ def valid_name(value):
     name_regex = re.compile(r"([A-Za-z]+),\s*([A-Za-z]+)(\s+)*([A-Za-z]*)")
 
     try:
-        valid_name = re.match(name_regex, value)
+        val_name = re.match(name_regex, value)
 
-        return [valid_name.group(1).capitalize(), valid_name.group(2).capitalize(), valid_name.group(4).capitalize()]
+        return [val_name.group(1).capitalize(), val_name.group(2).capitalize(), val_name.group(4).capitalize()]
 
-    except ValueError as err:
+    except AttributeError as err:
         return err
 
 
@@ -87,10 +90,9 @@ def print_cat_value(cat_list, prompt):
     :return: None
     """
     # Display category values and prompt user for selection
-    while True:
-        print(prompt)
-        for x, cat in enumerate(cat_list):
-            print(f"    {x+1}. {cat.capitalize()}")
+    print(prompt)
+    for x, cat in enumerate(cat_list):
+        print(f"    {x+1}. {cat.capitalize()}")
 
 
 def valid_cat_list(value, cat_list):
@@ -103,7 +105,7 @@ def valid_cat_list(value, cat_list):
         return value
 
     # Return index value if entered as numeric and is an index in the category list
-    elif value.isnumeric() and int(value) - 1 in range(len(cat_list)):
+    elif str(value).isnumeric() and int(value) - 1 in range(len(cat_list)):
         return cat_list[int(value) - 1]
 
     else:
@@ -116,7 +118,7 @@ def get_info(obj, attr_dict_list: list):
     Assigns to associated object property.
     :param obj: The object to you of which you will update the parameters.
     :param attr_dict_list: list of dictionaries of attributes to edit with the following structure:
-                        term: user-friendly term for the item you'd like to modify
+                        term: user-friendly term/phrase for the item you'd like to modify
                         attr: attribute name to modify
                         cat_list: category list to display (if relevant)
     :return: 1 if successful, else 0 if user quites
@@ -125,11 +127,14 @@ def get_info(obj, attr_dict_list: list):
     for attr_dict in attr_dict_list:
         while True:
             # If there is a category list entered, display the options before allowing selection.
-            if attr_dict["cat_list"]:
-                print_cat_value(attr_dict["cat_list"], f"Select a {attr_dict['name']}:")
+            try:
+                print_cat_value(attr_dict["cat_list"], f"Select a {attr_dict['term']}:")
+
+            except KeyError:
+                pass
 
             # Prompt user with user-friendly text, then return value until
-            value = qu_input(f"{attr_dict['name']}: ")
+            value = qu_input(f"{attr_dict['term']}: ")
 
             if not value:
                 if yes_or_no("You have left this information blank. Would you like to quit?"):
@@ -139,11 +144,13 @@ def get_info(obj, attr_dict_list: list):
                     return 0
 
             try:
-                obj.attr = value
-                return 1
+                attr_dict["attr"] = value
+                break
 
             except ValueError as err:
                 print(err)
+
+    return 1
 
 
 def confirm_info(obj, detail_dict):

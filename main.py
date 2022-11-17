@@ -2,8 +2,7 @@
 # based on a geographic data, patient preferences, and clinician availability.
 # It will use geocoding from Nominatim: https://nominatim.org/
 import navigation
-import validate
-from classes.person import Human, Patient, Clinician
+from classes.person import Patient, Clinician
 from classes.visits import Visit
 from classes.team import Team
 
@@ -34,7 +33,3 @@ if __name__ == "__main__":
     #     cls.load_tracked_instances()
 
     navigation.main_menu(_class_list)
-
-
-
-
