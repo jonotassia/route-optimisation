@@ -73,7 +73,7 @@ def obj_menu(class_list):
 
             # If object exists, send user to modification screen
             if obj:
-                inact_or_modify(obj)
+                obj.update_self()
 
             # If object does not exist, prompt user to create object as appropriate based on class.
             else:
@@ -124,45 +124,6 @@ def create_object_director(cls):
     if cont:
         obj = cls.create_self()
         return obj
-
-
-def inact_or_modify(obj):
-    """
-    Prompts the user whether they would like to inactivate or modify a record.
-    The function that is loaded is based on the class of the object that is passed as an attribute.
-    :param obj: The object that the user would like to modify.
-    :return: None
-    """
-    while True:
-        clear()
-        print(f"ID: {obj.id} \n"
-              f"Name: {obj.name}\n"
-              f"\n"
-              f"Please select an option from the list below:\n"
-              f"1) Modify\n"
-              f"2) Delete\n")
-
-        try:
-            selection = validate.qu_input("Option: ")
-
-            if not selection:
-                return 0
-
-            elif int(selection) == 1:
-                obj.update_self()
-
-            elif int(selection) == 2:
-                obj.inactivate_self()
-
-            else:
-                print("Invalid selection.")
-
-        except TypeError:
-            print("Please select an option by number from the list above.\n")
-
-        if not validate.yes_or_no("Further modifications required? "):
-            return 0
-
 
 def geo_feat():
     clear()

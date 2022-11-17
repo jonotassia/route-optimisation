@@ -86,27 +86,24 @@ def load_tracked_obj(cls):
     # TODO: Convert to a pull from a set of text files rather than reading each individual object file.
     obj = None
     try:
-        file_path = pathlib.Path(f"./data/{cls.__qualname__}.pkl").glob("*.pkl")
+        file_path = pathlib.Path(f"./data/{cls.__qualname__}/").glob("*.pkl")
         for file in file_path:
             obj = load_obj(cls, file)
 
         # Update tracked instance dictionary with new value (overwrites old values).
-        if isinstance(cls, classes.person.Human):
-            cls._tracked_instances[obj.id] = {"status": obj.status,
-                                              "name": obj.name,
-                                              "dob": obj.dob}
+        if isinstance(obj, classes.person.Human):
+            cls._tracked_instances[obj.id] = {"status": obj._status,
+                                              "name": obj._name,
+                                              "dob": obj._dob,
+                                              "sex": obj._sex}
 
         else:
-            cls._tracked_instances[obj.id] = {"status": obj.status,
-                                              "name": obj.name}
+            cls._tracked_instances[obj.id] = {"status": obj._status,
+                                              "name": obj._name}
+
+        next(cls._id_iter)
 
     except FileNotFoundError:
         print(f"{cls.__qualname__} could not be found.")
 
 
-def save_variables():
-    """
-    Saves each of the instance tracking and id counter variables when powering down.
-    :return: None
-    """
-    pass

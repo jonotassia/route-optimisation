@@ -162,7 +162,7 @@ def confirm_info(obj, detail_dict):
     :return: 1 if change is approved, else None
     """
 
-    print(f"\nA {type(obj).__name__} with the following details will be created: ")
+    print(f"\nA {type(obj).__name__} with the following details will be created/updated: ")
 
     for k, v in detail_dict.items():
         print(f"{k}: {v}")

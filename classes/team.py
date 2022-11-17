@@ -6,13 +6,13 @@ import classes
 
 
 class Team:
-    team_id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
+    _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
     _tracked_instances = {}
 
     def __init__(self, status=1, name=None, address=None):
         """Initializes a new request and links with pat_id. It contains the following attributes:
             req_id, pat_id, name, status, address, the earliest time, latest time, sched status, and cancel_reason"""
-        self._id = next(self.team_id_iter)
+        self._id = next(self._id_iter)
         self._name = name
         self._status = status
         self._pat_id = []
@@ -64,8 +64,87 @@ class Team:
             raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
 
     def update_self(self):
-        """Allows the user to update team information"""
-        pass
+        """
+        Allows the user to update team information, including name, address"""
+        while True:
+            selection = validate.qu_input("What would you like to do:"
+                                          "     1. Update Name"
+                                          "     2. Update Address"
+                                          "     3. Inactivate Record")
+
+            if not selection:
+                return 0
+
+            # Update request date and time
+            elif selection == 1:
+                self.update_name()
+
+            # Update request address
+            elif selection == 2:
+                self.update_address()
+
+            # Inactivate record
+            elif selection == 3:
+                self.inactivate_self()
+
+    def update_name(self):
+        """
+        Update name of team.
+        :return: 1 if successful
+        """
+        while True:
+            attr_list = [
+                {
+                    "term": f"Name. Previous: {self._name}",
+                    "attr": "name"
+                }
+            ]
+
+            # Update all attributes from above. Quit if user quits during any attribute
+            if not validate.get_info(self, attr_list):
+                self.refresh_self()
+                return 0
+
+            detail_dict = {
+                "Name": self._name
+            }
+
+            # If user does not confirm info, changes will be reverted.
+            if not validate.confirm_info(self, detail_dict):
+                self.refresh_self()
+                return 0
+
+            self.write_self()
+            return 1
+
+    def update_address(self):
+        """
+        Updates address for the request.
+        :return: 1 if successful.
+        """
+        attr_list = [
+            {
+                "term": f"Address. Previous: {self.address if self.address else 'None'}",
+                "attr": "address"
+            }
+        ]
+
+        # Update all attributes from above. Quit if user quits during any attribute
+        if not validate.get_info(self, attr_list):
+            self.refresh_self()
+            return 0
+
+        detail_dict = {
+            "Address": self.address
+        }
+
+        # If user does not confirm info, changes will be reverted.
+        if not validate.confirm_info(self, detail_dict):
+            self.refresh_self()
+            return 0
+
+        self.write_self()
+        return 1
 
     def write_self(self):
         """Writes the object to file as a JSON using the pickle module"""

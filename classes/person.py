@@ -9,15 +9,14 @@ from datetime import time
 
 
 class Human:
-    # TODO: Save ID iterable so it can be pulled when programme initializes
-    _new_hum_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
+    _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
     _tracked_instances = {}
     _c_sex_options = ("male", "female", "not specified")
 
-    def __init__(self, status=1, name=("Last", "First", "Middle"), dob="", sex="", address=""):
+    def __init__(self, status=1, name="", dob="", sex="", address=""):
         """Initiates a human objects with the following attributes:
         id, first name, last name, middle name, date of birth, sex, and address."""
-        self._id = next(self._new_hum_iter)
+        self._id = next(self._id_iter)
         self._status = status
         self._name = name
         self._dob = dob
@@ -131,7 +130,7 @@ class Human:
     @team_id.setter
     def team_id(self, value):
         """Checks that team id is in instance list before assigning"""
-        if value in classes.team.Team.tracked_instances.keys():
+        if value in classes.team.Team._tracked_instances.keys():
             self._team_id = value
 
         else:
@@ -139,7 +138,7 @@ class Human:
 
     @property
     def team_name(self):
-        self._team_name = classes.team.Team.tracked_instances[self._team_id]["name"]
+        self._team_name = classes.team.Team._tracked_instances[self._team_id]["name"]
         return self._team_name
 
     @classmethod
@@ -223,7 +222,7 @@ class Human:
 
 
 class Patient(Human):
-    _new_pat_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
+    _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
     _tracked_instances = {}
     _c_inactive_reason = ("no longer under care", "expired", "added in error")
 
@@ -235,7 +234,7 @@ class Patient(Human):
         """
         super().__init__(status, name, dob, sex, address)
 
-        self._id = next(self._new_pat_iter)
+        self._id = next(self._id_iter)
         self._inactive_reason = None
         self.visits = []
         self._death_date = None
@@ -286,29 +285,84 @@ class Patient(Human):
         else:
             raise ValueError("Please enter a valid time in the format HHMM.\n")
 
-    def update_patient_address(self):
-        """Updates the patient's address. Updates self.address. Writes updates to file.
-            Returns 0 on successful update."""
+    def update_self(self):
+        """
+        Groups all update methods for user selection. This will be called when modifying record in navigation.py
+        """
 
-        print(f"Please enter a new address or leave blank to enter previous start time: {self.address}\n")
-        new_address = validate.valid_address(validate.qu_input("Address: "))
+        while True:
+            print(f"ID: {self.id}".ljust(10), f"Name: {self.name}\n".rjust(10))
 
-        valid = validate.yes_or_no("Please confirm that the updated details are correct.\n"
-                                   f"Address: {new_address if new_address else self.address}")
+            selection = validate.qu_input("What would you like to do:"
+                                          "     1. View or Modify Pending/Scheduled Visits"
+                                          "     2. Create Visit"
+                                          "     3. Modify Address"
+                                          "     4. Modify Visit Skills/Preferences"
+                                          "     5. Assign Team"
+                                          "     6. Inactivate Record"
+                                          )
 
-        if valid:
-            if new_address:
-                self.address = new_address
-            self.write_self()
+            if not selection:
+                return 0
 
+            elif selection == 1:
+                self.get_requests()
+
+            # Generate a new visit
+            elif selection == 2:
+                self.generate_visit()
+
+            # Update address
+            elif selection == 3:
+                self.update_address()
+
+            # Update preferences, including skill requirements, gender, and times
+            elif selection == 4:
+                self.update_skill_pref()
+
+            # Assign responsible team to patient
+            elif selection == 5:
+                self.assign_team()
+
+            # Inactivate patient
+            elif selection == 6:
+                self.inactivate_self()
+
+            else:
+                print("Invalid selection.")
+
+    def update_address(self):
+        """
+        Updates address for the request.
+        :return: 1 if successful.
+        """
+        attr_list = [
+            {
+                "term": f"Address. Previous: {self.address if self.address else 'None'}",
+                "attr": "address"
+            }
+        ]
+
+        # Update all attributes from above. Quit if user quits during any attribute
+        if not validate.get_info(self, attr_list):
+            self.refresh_self()
+            return 0
+
+        detail_dict = {
+            "Address": self.address
+        }
+
+        # If user does not confirm info, changes will be reverted.
+        if not validate.confirm_info(self, detail_dict):
+            self.refresh_self()
+            return 0
+
+        self.write_self()
         return 1
 
-    def update_preferences(self):
-        """Retrieves the patient's visit preferences"""
-        pass
-
-    def update_self(self):
-        """Groups all update methods for user selection. This will be called when modifying record in navigation.py"""
+    def update_skill_pref(self):
+        """Updates the patient's skill requirements and visit preferences"""
+        # TODO: Define list of skills/preferences required for patient per instance. This should be inherited by visit.
         pass
 
     def assign_team(self):
@@ -325,7 +379,28 @@ class Patient(Human):
         return new_visit
 
     def get_requests(self):
-        pass
+        """
+        Networks to visits in the self._visits list and displays key information, including:
+            scheduling_status
+            date
+            time
+            address
+        Sorts visits in order of expected date and time.
+        :return: 1 if successful
+        """
+        for visit_id in self._visits:
+            visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
+            print(f"Visit ID: {visit.id}"
+                  f"    Scheduling Status: {visit.sched_status}"
+                  f"    Expected Date: {visit.exp_date}"
+                  f"    Visit Start Window: {visit.time_earliest}"
+                  f"    Visit End Window: {visit.time_latest}")
+
+        while True:
+            selection = validate.qu_input("Which visit would you like to modify? ")
+
+            if validate.valid_cat_list(selection, self._visits):
+                visit.update_self()
 
     def inactivate_self(self):
         """
@@ -417,11 +492,10 @@ class Patient(Human):
 
 
 class Clinician(Human):
-    _clin_id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
+    _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
     _tracked_instances = {}
     _c_inactive_reason = ("no longer works here", "switched roles", "added in error")
 
-    # TODO: Determine how to incorporate the concept of skills
     # TODO: Add licensure as an attribute
 
     def __init__(self, status=1, name="", dob="", sex="", address=""):
@@ -432,11 +506,12 @@ class Clinician(Human):
 
         super().__init__(status, name, dob, sex, address)
 
-        self._id = next(self._clin_id_iter)
+        self._id = next(self._id_iter)
         self._start_address = address
         self._end_address = address
         self._start_time = time(9)
         self._end_time = time(17)
+        self._visits = []
         self._inactive_reason = None
 
     @property
@@ -516,11 +591,61 @@ class Clinician(Human):
 
     def assign_team(self):
         """Assigns the clinician to a team so that they can be considered in that team's route calculation"""
-        # TODO: Determine how to incorporate concept of a team
+
         pass
 
     def update_self(self):
-        """Groups all update methods for user selection. This will be called when modifying record in navigation.py"""
+        """
+        Groups all update methods for user selection. This will be called when modifying record in navigation.py
+        """
+        while True:
+            print(f"ID: {self.id}".ljust(10), f"Name: {self.name}\n".rjust(10))
+
+            selection = validate.qu_input("What would you like to do:"
+                                          "     1. View/Modify Scheduled Visit"
+                                          "     2. Update Start/End Times and Addresses"
+                                          "     3. Modify Personal Address"
+                                          "     4. Modify Skills"
+                                          "     5. Assign Team"
+                                          "     6. Inactivate Record"
+                                          )
+
+            if not selection:
+                return 0
+
+            # View/modify scheduled visits
+            elif selection == 1:
+                self.scheduled_visits()
+
+            # Update start/end time and address
+            elif selection == 2:
+                self.update_start_end()
+
+            # Update address
+            elif selection == 3:
+                self.update_address()
+
+            # Modify clinical skills
+            elif selection == 4:
+                self.modify_skills()
+
+            # Assign team
+            elif selection == 5:
+                self.assign_team()
+
+            # Inactivate record
+            elif selection == 6:
+                self.inactivate_self()
+
+            else:
+                print("Invalid selection.")
+
+    def scheduled_visits(self):
+        """
+        Grabs all visits from self._visits and displays schedule for user by day.
+        :return: 1 if successful
+        """
+        pass
 
     def update_start_end(self):
         """Sets the starting and ending time/geocoded address for the clinician
@@ -566,6 +691,43 @@ class Clinician(Human):
         self.write_self()
 
         return 1
+
+    def update_address(self):
+        """
+        Updates address for the request.
+        :return: 1 if successful.
+        """
+        attr_list = [
+            {
+                "term": f"Address. Previous: {self.address if self.address else 'None'}",
+                "attr": "address"
+            }
+        ]
+
+        # Update all attributes from above. Quit if user quits during any attribute
+        if not validate.get_info(self, attr_list):
+            self.refresh_self()
+            return 0
+
+        detail_dict = {
+            "Address": self.address
+        }
+
+        # If user does not confirm info, changes will be reverted.
+        if not validate.confirm_info(self, detail_dict):
+            self.refresh_self()
+            return 0
+
+        self.write_self()
+        return 1
+
+    def modify_skills(self):
+        """
+        Updates clinician skills list based on clinical registration. Used for validation to drive scheduling for
+        patients based on their needs.
+        :return: 1 if successful
+        """
+        pass
 
     def optimize_clinician_trip(self):
         """Calculates the estimated trip route for the clinician. Allows for overrides of start/end constraints"""

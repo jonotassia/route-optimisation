@@ -8,7 +8,7 @@ from datetime import datetime, date
 
 
 class Visit:
-    visit_id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
+    _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
     _tracked_instances = {}
     _c_sched_status = ("unscheduled", "scheduled", "no show", "cancelled")
     _c_cancel_reason = ("clinician unavailable", "patient unavailable", "no longer needed", "expired", "system action")
@@ -16,7 +16,7 @@ class Visit:
     def __init__(self, pat_id, status=1, sched_status="", address="", time_earliest="", time_latest="", exp_date=""):
         """Initializes a new request and links with pat_id. It contains the following attributes:
             req_id, pat_id, name, status, address, the earliest time, latest time, sched status, and cancel_reason"""
-        self._id = next(self.visit_id_iter)
+        self._id = next(self._id_iter)
         self._pat_id = pat_id
         self._name = "Visit" + str(self._id)
         self._status = status
@@ -146,80 +146,100 @@ class Visit:
             self._exp_date = date
 
     def update_self(self):
-        """Allows the user to update visit information, including date/time window or address
-            Updates self.date, self.time_earliest, and self.time_latest. Writes updates to file.
+        """Allows the user to update visit information, including date/time window or address.
             Returns 0 on successful update."""
 
         while True:
-            selection = validate.qu_input("What would you like to update:"
-                                          "     1. Visit Date and Time"
-                                          "     2. Visit Address")
+            selection = validate.qu_input("What would you like to do:"
+                                          "     1. Modify Visit Date and Time"
+                                          "     2. Modify Visit Address"
+                                          "     3. Inactivate Record")
 
             if not selection:
                 return 0
 
             # Update request date and time
             elif selection == 1:
-                attr_list = [
-                    {
-                        "term": f"Expected Date (DD/MM/YYYY). Previous: {self.exp_date if self.exp_date else 'None'}",
-                        "attr": "exp_date"
-                    },
-                    {
-                        "term": f"Start Time Window. Previous: {self.time_earliest if self.time_earliest else 'None'}",
-                        "attr": "time_earliest"
-                    },
-                    {
-                        "term": f"End Time Window. Previous: {self.time_latest if self.time_latest else 'None'}",
-                        "attr": "time_latest"
-                    },
-                ]
-
-                # Update all attributes from above. Quit if user quits during any attribute
-                if not validate.get_info(self, attr_list):
-                    self.refresh_self()
-                    return 0
-
-                detail_dict = {
-                    "Expected Date": self.exp_date,
-                    "Start Time Window": self.time_earliest,
-                    "End Time Window": self.time_latest,
-                }
-
-                # If user does not confirm info, changes will be reverted.
-                if not validate.confirm_info(self, detail_dict):
-                    self.refresh_self()
-                    return 0
-
-                self.write_self()
-
-                return 1
+                self.update_date_time()
 
             # Update request address
             elif selection == 2:
-                attr_list = [
-                    {
-                        "term": f"Address. Previous: {self.address if self.address else 'None'}",
-                        "attr": "address"
-                    }
-                ]
+                self.update_address()
 
-                # Update all attributes from above. Quit if user quits during any attribute
-                if not validate.get_info(self, attr_list):
-                    self.refresh_self()
-                    return 0
+            elif selection == 3:
+                self.inactivate_self()
 
-                detail_dict = {
-                    "Address": self.address
-                }
+            else:
+                print("Invalid selection.")
 
-                # If user does not confirm info, changes will be reverted.
-                if not validate.confirm_info(self, detail_dict):
-                    self.refresh_self()
-                    return 0
+    def update_date_time(self):
+        """
+        Updates self.date, self.time_earliest, and self.time_latest. Writes updates to file.
+        :return: 1 if successful.
+        """
+        attr_list = [
+            {
+                "term": f"Expected Date (DD/MM/YYYY). Previous: {self.exp_date if self.exp_date else 'None'}",
+                "attr": "exp_date"
+            },
+            {
+                "term": f"Start Time Window. Previous: {self.time_earliest if self.time_earliest else 'None'}",
+                "attr": "time_earliest"
+            },
+            {
+                "term": f"End Time Window. Previous: {self.time_latest if self.time_latest else 'None'}",
+                "attr": "time_latest"
+            },
+        ]
 
-                self.write_self()
-                return 1
+        # Update all attributes from above. Quit if user quits during any attribute
+        if not validate.get_info(self, attr_list):
+            self.refresh_self()
+            return 0
+
+        detail_dict = {
+            "Expected Date": self.exp_date,
+            "Start Time Window": self.time_earliest,
+            "End Time Window": self.time_latest,
+        }
+
+        # If user does not confirm info, changes will be reverted.
+        if not validate.confirm_info(self, detail_dict):
+            self.refresh_self()
+            return 0
+
+        self.write_self()
+
+        return 1
+
+    def update_address(self):
+        """
+        Updates address for the request.
+        :return: 1 if successful.
+        """
+        attr_list = [
+            {
+                "term": f"Address. Previous: {self.address if self.address else 'None'}",
+                "attr": "address"
+            }
+        ]
+
+        # Update all attributes from above. Quit if user quits during any attribute
+        if not validate.get_info(self, attr_list):
+            self.refresh_self()
+            return 0
+
+        detail_dict = {
+            "Address": self.address
+        }
+
+        # If user does not confirm info, changes will be reverted.
+        if not validate.confirm_info(self, detail_dict):
+            self.refresh_self()
+            return 0
+
+        self.write_self()
+        return 1
 
     def schedule_visit(self):
         pass

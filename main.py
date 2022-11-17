@@ -29,7 +29,7 @@ Secondary actions available:
 if __name__ == "__main__":
     _class_list = (Patient, Clinician, Visit, Team)
 
-    # for cls in _class_list:
-    #     cls.load_tracked_instances()
+    for cls in _class_list:
+        cls.load_tracked_instances()
 
     navigation.main_menu(_class_list)
