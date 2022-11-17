@@ -7,13 +7,13 @@ import classes
 
 class Team:
     team_id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
-    tracked_instances = {}
+    _tracked_instances = {}
 
     def __init__(self, status=1, name=None, address=None):
         """Initializes a new request and links with pat_id. It contains the following attributes:
             req_id, pat_id, name, status, address, the earliest time, latest time, sched status, and cancel_reason"""
         self._id = next(self.team_id_iter)
-        self.name = name
+        self._name = name
         self._status = status
         self._pat_id = []
         self._clin_id = []
@@ -57,7 +57,7 @@ class Team:
         """Checks values of date of birth before assigning"""
         address = validate.valid_address(value)
 
-        if address:
+        if not isinstance(address, Exception):
             self._address = address
 
         else:
@@ -87,11 +87,11 @@ class Team:
         attr_list = [
             {
                 "term": "Name",
-                "attr": obj.name
+                "attr": "name"
             },
             {
                 "term": "Address",
-                "attr": obj.address
+                "attr": "address"
             }
         ]
 
@@ -121,7 +121,13 @@ class Team:
     @classmethod
     def load_self(cls):
         """Class method to initialise the object from file. Returns the object"""
-        in_out.get_obj(cls)
+        obj = in_out.get_obj(cls)
+
+        if not obj:
+            return 0
+
+        else:
+            return obj
 
     @classmethod
     def load_tracked_instances(cls):

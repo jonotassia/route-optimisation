@@ -98,10 +98,11 @@ def class_selection(class_list):
     while True:
         selection = validate.qu_input("Selection: ")
 
-        selection = validate.valid_cat_list(selection, selection_list)
-
         if not selection:
             return 0
+
+        # Validate that user passed a valid class
+        selection = validate.valid_cat_list(selection, selection_list)
 
         # Convert selection back to the class object by using the matching index in the string list
         cls = class_list[selection_list.index(selection)]

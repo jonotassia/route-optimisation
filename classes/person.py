@@ -49,13 +49,18 @@ class Human:
 
     @property
     def name(self):
-        return self._name[0], ",", self._name[1], self._name[2]
+        try:
+            name = self._name[0], ",", self._name[1], self._name[2]
+            return name
+
+        except IndexError:
+            return None
 
     @name.setter
     def name(self, value):
         name = validate.valid_name(value)
 
-        if name:
+        if not isinstance(name, Exception):
             self._name = name
 
         else:
@@ -75,14 +80,14 @@ class Human:
 
     @property
     def dob(self):
-        return self._dob
+        return self._dob.strftime("%d/%m/%Y")
 
     @dob.setter
     def dob(self, value):
         """Checks values of date of birth before assigning"""
         dob = validate.valid_date(value)
 
-        if dob:
+        if not isinstance(dob, Exception):
             self._dob = dob
 
         else:
@@ -97,7 +102,7 @@ class Human:
         """Checks values of sex before assigning"""
         sex = validate.valid_cat_list(value, self._c_sex_options)
 
-        if sex:
+        if not isinstance(sex, Exception):
             self._sex = sex
 
         else:
@@ -112,7 +117,7 @@ class Human:
         """Checks values of date of birth before assigning"""
         address = validate.valid_address(value)
 
-        if address:
+        if not isinstance(address, Exception):
             self._address = address
 
         else:
@@ -153,20 +158,20 @@ class Human:
         attr_list = [
             {
                 "term": "Name (LAST, FIRST MIDDLE)",
-                "attr": obj.name
+                "attr": "name"
             },
             {
                 "term": "Date of Birth",
-                "attr": obj.dob
+                "attr": "dob"
             },
             {
                 "term": "Sex",
-                "attr": obj.sex,
+                "attr": "sex",
                 "cat_list": obj._c_sex_options
             },
             {
                 "term": "Address",
-                "attr": obj.address
+                "attr": "address"
             }
         ]
 
@@ -202,7 +207,13 @@ class Human:
     @classmethod
     def load_self(cls):
         """Class method to initialise the object from file. Returns the object"""
-        in_out.get_obj(cls)
+        obj = in_out.get_obj(cls)
+
+        if not obj:
+            return 0
+
+        else:
+            return obj
 
     @classmethod
     def load_tracked_instances(cls):
@@ -226,7 +237,7 @@ class Patient(Human):
 
         self._id = next(self._new_pat_iter)
         self._inactive_reason = None
-        self._visits = []
+        self.visits = []
         self._death_date = None
         self._death_time = None
 
@@ -247,7 +258,7 @@ class Patient(Human):
 
     @property
     def death_date(self):
-        return self._death_date
+        return self._death_date.strftime("%d/%m/%Y")
 
     @death_date.setter
     def death_date(self, value):
@@ -309,7 +320,7 @@ class Patient(Human):
         # TODO: Determine how to incorporate the concept of skills
 
         new_visit = classes.visits.Visit(self.id)
-        self._visits.append(new_visit.id)
+        self.visits.append(new_visit.id)
 
         return new_visit
 
@@ -342,7 +353,7 @@ class Patient(Human):
         attr_list = [
             {
                 "term": "Inactivation Reason: ",
-                "attr": self.inactive_reason,
+                "attr": "inactive_reason",
                 "cat_list": self._c_inactive_reason
             }
         ]
@@ -358,11 +369,11 @@ class Patient(Human):
             attr_list = [
                 {
                     "term": "Death Date: ",
-                    "attr": self.death_date
+                    "attr": "death_date"
                 },
                 {
                     "term": "Death Time",
-                    "attr": self.death_time
+                    "attr": "death_time"
                 }
             ]
 
@@ -375,8 +386,8 @@ class Patient(Human):
         if validate.yes_or_no(prompt):
             # Cancel linked visit requests with a reason of system action. This occurs here rather than above to
             # give user the opportunity to back out changes before cancelling visits.
-            if self._visits:
-                for visit_id in self._visits:
+            if self.visits:
+                for visit_id in self.visits:
                     visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}")
 
                     visit.status = 0
@@ -519,19 +530,19 @@ class Clinician(Human):
         attr_list = [
             {
                 "term": f"Start Time (HHMM). Previous: {self.start_time if self.start_time else 'None'}",
-                "attr": self.start_time
+                "attr": "start_time"
             },
             {
                 "term": f"Start Address. Previous: {self.start_address if self.start_address else 'None'}",
-                "attr": self.start_address
+                "attr": "start_address"
             },
             {
                 "term": f"End Time (HHMM). Previous: {self.end_time if self.end_time else 'None'}",
-                "attr": self.end_time
+                "attr": "end_time"
             },
             {
                 "term": f"End Address. Previous: {self.end_address if self.end_address else 'None'}",
-                "attr": self.end_address
+                "attr": "end_address"
             }
         ]
 
@@ -575,7 +586,7 @@ class Clinician(Human):
             attr_list = [
                 {
                     "term": "Inactivation Reason: ",
-                    "attr": self.inactive_reason,
+                    "attr": "inactive_reason",
                     "cat_list": self._c_inactive_reason
                 }
             ]

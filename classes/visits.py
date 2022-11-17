@@ -9,7 +9,7 @@ from datetime import datetime, date
 
 class Visit:
     visit_id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
-    tracked_instances = {}
+    _tracked_instances = {}
     _c_sched_status = ("unscheduled", "scheduled", "no show", "cancelled")
     _c_cancel_reason = ("clinician unavailable", "patient unavailable", "no longer needed", "expired", "system action")
 
@@ -61,7 +61,7 @@ class Visit:
         """Checks values of date of birth before assigning"""
         address = validate.valid_address(value)
 
-        if address:
+        if not isinstance(address, Exception):
             self._address = address
 
         else:
@@ -76,7 +76,7 @@ class Visit:
         """Checks values of time window start before assigning"""
         time = validate.valid_time(value)
 
-        if time:
+        if not isinstance(time, Exception):
             self._time_earliest = time
 
         else:
@@ -91,7 +91,7 @@ class Visit:
         """Checks values of time window end before assigning"""
         time = validate.valid_time(value)
 
-        if time:
+        if not isinstance(time, Exception):
             self._time_latest = time
 
         else:
@@ -106,7 +106,7 @@ class Visit:
         """Checks values of cancel reason before assigning"""
         reason = validate.valid_cat_list(value, self._c_cancel_reason)
 
-        if reason:
+        if not isinstance(reason, Exception):
             self._cancel_reason = reason
 
         else:
@@ -121,7 +121,7 @@ class Visit:
         """Checks values of sched status before assigning"""
         reason = validate.valid_cat_list(value, self._c_sched_status)
 
-        if reason:
+        if not isinstance(reason, Exception):
             self._sched_status = reason
 
         else:
@@ -129,18 +129,21 @@ class Visit:
 
     @property
     def exp_date(self):
-        return self._exp_date
+        return self._exp_date.strftime("%d/%m/%Y")
 
     @exp_date.setter
     def exp_date(self, value):
         """Checks values of expected date before assigning"""
         date = validate.valid_date(value)
 
-        if date:
-            self._exp_date = date
+        if isinstance(date, Exception):
+            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+
+        elif date < date.today():
+            raise ValueError("Date cannot be before today.\n")
 
         else:
-            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+            self._exp_date = date
 
     def update_self(self):
         """Allows the user to update visit information, including date/time window or address
@@ -160,15 +163,15 @@ class Visit:
                 attr_list = [
                     {
                         "term": f"Expected Date (DD/MM/YYYY). Previous: {self.exp_date if self.exp_date else 'None'}",
-                        "attr": self.exp_date
+                        "attr": "exp_date"
                     },
                     {
                         "term": f"Start Time Window. Previous: {self.time_earliest if self.time_earliest else 'None'}",
-                        "attr": self.time_earliest
+                        "attr": "time_earliest"
                     },
                     {
                         "term": f"End Time Window. Previous: {self.time_latest if self.time_latest else 'None'}",
-                        "attr": self.time_latest
+                        "attr": "time_latest"
                     },
                 ]
 
@@ -197,7 +200,7 @@ class Visit:
                 attr_list = [
                     {
                         "term": f"Address. Previous: {self.address if self.address else 'None'}",
-                        "attr": self.address
+                        "attr": "address"
                     }
                 ]
 
@@ -237,25 +240,31 @@ class Visit:
             0 if the user does not
         """
         print("Please select a patient to create a visit request.")
+
+        # Load a patient to generate and attach the request
         pat = classes.person.Patient.load_self()
-        obj = pat.generate_request()
+
+        if not pat:
+            return 0
+
+        obj = pat.generate_visit()
 
         attr_list = [
             {
                 "term": "Address",
-                "attr": obj.address
+                "attr": "address"
             },
             {
                 "term": "Expected Date",
-                "attr": obj.exp_date
+                "attr": "exp_date"
             },
             {
                 "term": "Window Start Time",
-                "attr": obj.time_earliest,
+                "attr": "time_earliest",
             },
             {
                 "term": "Window End Time",
-                "attr": obj.time_latest
+                "attr": "time_latest"
             }
         ]
 
@@ -288,7 +297,13 @@ class Visit:
     @classmethod
     def load_self(cls):
         """Class method to initialise the object from file. Returns the object"""
-        in_out.get_obj(cls)
+        obj = in_out.get_obj(cls)
+
+        if not obj:
+            return 0
+
+        else:
+            return obj
 
     @classmethod
     def load_tracked_instances(cls):
@@ -318,7 +333,7 @@ class Visit:
             attr_list = [
                 {
                     "term": "Cancel Reason: ",
-                    "attr": self.cancel_reason,
+                    "attr": "cancel_reason",
                     "cat_list": self._c_cancel_reason
                 }
             ]
@@ -353,7 +368,7 @@ class Visit:
                     request = pickle.load(read_file)
 
                     # Evaluate date against current date and mark as expired if due before current date
-                    if datetime.strptime(request.exp_date, '%m-%d-%Y').date() < date.today():
+                    if datetime.strptime(request.exp_date, '%d-%m-%Y').date() < date.today():
                         request.status = 0
                         request.cancel_reason = cls._c_cancel_reason[3]
                         cls.write_self(request)

@@ -15,14 +15,14 @@ def write_obj(obj):
 
     # Update tracked instance dictionary with new value (overwrites old values). Varies type of object.
     if isinstance(obj, classes.person.Human):
-        obj._tracked_instances[obj.id] = {"status": obj.status,
-                                          "name": obj.name,
-                                          "dob": obj.dob,
-                                          "sex": obj.sex}
+        obj._tracked_instances[obj.id] = {"status": obj._status,
+                                          "name": obj._name,
+                                          "dob": obj._dob,
+                                          "sex": obj._sex}
 
     else:
-        obj._tracked_instances[obj.id] = {"status": obj.status,
-                                          "name": obj.name}
+        obj._tracked_instances[obj.id] = {"status": obj._status,
+                                          "name": obj._name}
 
     print(f"{obj.__class__.__name__} successfully saved.\n")
 

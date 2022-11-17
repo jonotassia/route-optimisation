@@ -38,7 +38,7 @@ def valid_date(value):
     :return: date if the date is valid, else None
     """
     try:
-        date = datetime.strptime(value, "%d/%m/%Y").date()
+        date = datetime.strptime(value, "%d/%m/%Y")
         return date
 
     except ValueError as err:
@@ -137,14 +137,14 @@ def get_info(obj, attr_dict_list: list):
             value = qu_input(f"{attr_dict['term']}: ")
 
             if not value:
-                if yes_or_no("You have left this information blank. Would you like to quit?"):
-                    continue
-
-                else:
+                if yes_or_no("You have left this information blank. Would you like to quit? "):
                     return 0
 
+                else:
+                    continue
+
             try:
-                attr_dict["attr"] = value
+                setattr(obj, attr_dict["attr"], value)
                 break
 
             except ValueError as err:
