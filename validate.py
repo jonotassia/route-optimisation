@@ -1,145 +1,156 @@
 # This file contains functions to gather demographic information on Patient and Clinician
 from datetime import datetime
 from Levenshtein import ratio as levratio
+import re
+
+
+def qu_input(prompt):
+    value = input(prompt)
+
+    if value == "q" or not value:
+        return 0
+
+    else:
+        return value
 
 
 def yes_or_no(prompt):
     """Validates a user's input as yes (return 1) or no (return 0)."""
     while True:
-        confirm = input(prompt).lower()
+        confirm = qu_input(prompt)
 
-        if confirm == "q" or not confirm:
+        if not confirm:
             return 0
 
-        elif confirm == ("n" or "no"):
+        if confirm.isnumeric():
+            print('Please enter "yes" or "no".')
+
+        elif confirm.lower() == ("n" or "no"):
             return 0
 
-        elif confirm == ("y" or "yes"):
+        elif confirm.lower() == ("y" or "yes"):
             return 1
 
 
-def get_date(date_of_birth=0):
-    """Gathers a date (either birthdate or appt date).
-        Checks for validity and returns dob in DD/MM/YYYY format
-        Keyword Arguments:
-            date_of_birth: determines if this is a date used for date of birth (1). Default 0."""
-    while True:
+def valid_date(value):
+    """
+    Checks for validity and returns in DD/MM/YYYY format
+    :return: date if the date is valid, else None
+    """
+    try:
+        date = datetime.strptime(value, "%d/%m/%Y")
+        return date
 
-        if date_of_birth:
-            date = input("Date of Birth (DD/MM/YYYY): ")
-        else:
-            date = input("Date (DD/MM/YYYY): ")
-
-        if date == "q" or not date:
-            return 0
-
-        else:
-            try:
-                date = datetime.strptime(date, "%d/%m/%Y").date()
-                return date
-
-            except ValueError:
-                print("Please enter a valid date in the format DD/MM/YYYY.\n")
+    except ValueError as err:
+        return err
 
 
-def get_name():
+def valid_name(value):
     """Gathers name information. Returns first name, middle name, and last name"""
-    while True:
-        first_name = input("First Name: ").lower()
+    name_regex = re.compile(r"([A-Za-z]+),\s*([A-Za-z]+)(\s+)*([A-Za-z]*)")
 
-        if first_name == "q" or not first_name:
-            return 0
+    try:
+        val_name = re.match(name_regex, value)
 
-        elif first_name.isalpha():
-            break
+        return [val_name.group(1).capitalize(), val_name.group(2).capitalize(), val_name.group(4).capitalize()]
 
-        else:
-            print("Please enter a first name.")
-
-    while True:
-        last_name = input("Last Name: ").lower()
-
-        if last_name == "q" or not last_name:
-            return 0
-
-        elif last_name.isalpha():
-            break
-
-        else:
-            print("Please enter a last name.")
-
-    while True:
-        middle_name = input("Middle Name (Optional): ").lower()
-
-        if not middle_name:
-            break
-
-        if middle_name.isalpha():
-            break
-
-        else:
-            print("Please enter a valid middle name.")
-
-    return first_name.capitalize(), middle_name.capitalize(), last_name.capitalize()
+    except AttributeError as err:
+        return err
 
 
-def get_address():
+def valid_address(value):
     """Uses Place Key api to ensure address is valid: https://www.placekey.io/blog/getting-started-with-placekey-io
         Returns address dictionary with keys for street, building/apt number, city, state, country, and post code."""
     # TODO: Implement Placekey API to validate address
-    address = input("Address: ")
+    address = value
 
-    if address == "q" or "":
-        return 0
-
-    else:
+    if address:
         return address
 
-
-def get_time():
-    """Gets, validates, and returns a time"""
-    while True:
-        time = input("Time (HHMM): ")
-
-        if time == "q" or not time:
-            return 0
-
-        else:
-            try:
-                time = datetime.strptime(time, "%H%M").time()
-                return time
-
-            except ValueError:
-                print("Invalid Time. Please enter in the format HHMM.\n")
+    else:
+        return ValueError
 
 
-def get_cat_value(cat_list, prompt):
+def valid_time(value):
     """
-    Takes a category list and prompt as a parameter. Validates that the input from a user is in the category list.
-    If is_class is set to True, the class list will be looped and converted to human-readable format.
-    :return: The index value if the user selects a value in the category list, or 0 if the user quits"""
+    Checks for validity and returns in HHMM format
+    :return: time if the time is valid, else None
+    """
+    try:
+        time = datetime.strptime(value, "%H%M").time()
+        return time
 
+    except ValueError as err:
+        return err
+
+
+def print_cat_value(cat_list, prompt):
+    """
+    Takes a category list and prompt as a parameter.
+    :return: None
+    """
     # Display category values and prompt user for selection
-    while True:
-        print(prompt)
-        for x, cat in enumerate(cat_list):
-            print(f"    {x+1}. {cat.capitalize()}")
+    print(prompt)
+    for x, cat in enumerate(cat_list):
+        print(f"    {x+1}. {cat.capitalize()}")
 
-        selection = input(f"\nSelection: ").lower()
 
-        if selection == "q" or not selection:
-            return 0
+def valid_cat_list(value, cat_list):
+    """
+    Validates that the input from a user is in the category list.
+    :return: Value from cat list.
+    """
+    # Return corresponding index value if entered as alphanum
+    if value in cat_list:
+        return value
 
-        # Return corresponding index value if entered as alphanum
-        if selection in cat_list:
-            return selection
+    # Return index value if entered as numeric and is an index in the category list
+    elif str(value).isnumeric() and int(value) - 1 in range(len(cat_list)):
+        return cat_list[int(value) - 1]
 
-        # Return index value if entered as numeric and is an index in the category list
-        elif selection.isnumeric() and int(selection)-1 in range(len(cat_list)):
-            return cat_list[int(selection)-1]
+    else:
+        return ValueError
 
-        else:
-            print("Invalid selection.")
+
+def get_info(obj, attr_dict_list: list):
+    """
+    Takes a list of dictionaries containing attributes and input functions to prompt user for required details.
+    Assigns to associated object property.
+    :param obj: The object to you of which you will update the parameters.
+    :param attr_dict_list: list of dictionaries of attributes to edit with the following structure:
+                        term: user-friendly term/phrase for the item you'd like to modify
+                        attr: attribute name to modify
+                        cat_list: category list to display (if relevant)
+    :return: 1 if successful, else 0 if user quites
+    """
+
+    for attr_dict in attr_dict_list:
+        while True:
+            # If there is a category list entered, display the options before allowing selection.
+            try:
+                print_cat_value(attr_dict["cat_list"], f"Select a {attr_dict['term']}:")
+
+            except KeyError:
+                pass
+
+            # Prompt user with user-friendly text, then return value until
+            value = qu_input(f"{attr_dict['term']}: ")
+
+            if not value:
+                if yes_or_no("You have left this information blank. Would you like to quit? "):
+                    return 0
+
+                else:
+                    continue
+
+            try:
+                setattr(obj, attr_dict["attr"], value)
+                break
+
+            except ValueError as err:
+                print(err)
+
+    return 1
 
 
 def confirm_info(obj, detail_dict):
@@ -186,10 +197,10 @@ def validate_obj_by_name(cls, obj, inc_inac=0):
     # Prompt user to select option from above
     while True:
         try:
-            selection = input("Select an index number or enter an ID from above: ")
+            selection = qu_input("Select an index number or enter an ID from above: ")
 
             # Quit if q or blank is entered
-            if selection == 'q' or not selection:
+            if not selection:
                 return 0
 
             selection = int(selection)

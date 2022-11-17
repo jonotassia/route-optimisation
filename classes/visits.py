@@ -9,7 +9,7 @@ from datetime import datetime, date
 
 class Visit:
     visit_id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
-    tracked_instances = {}
+    _tracked_instances = {}
     _c_sched_status = ("unscheduled", "scheduled", "no show", "cancelled")
     _c_cancel_reason = ("clinician unavailable", "patient unavailable", "no longer needed", "expired", "system action")
 
@@ -20,12 +20,12 @@ class Visit:
         self._pat_id = pat_id
         self._name = "Visit" + str(self._id)
         self._status = status
-        self.address = address
-        self.time_earliest = time_earliest
-        self.time_latest = time_latest
-        self.exp_date = exp_date
-        self.cancel_reason = None
-        self.sched_status = sched_status
+        self._address = address
+        self._time_earliest = time_earliest
+        self._time_latest = time_latest
+        self._exp_date = exp_date
+        self._cancel_reason = None
+        self._sched_status = sched_status
 
     @property
     def id(self):
@@ -41,7 +41,7 @@ class Visit:
 
     @status.setter
     def status(self, value):
-        """Checks values of sex before assigning"""
+        """Checks values of status before assigning"""
         try:
             if value == 1 or 0:
                 self.status = value
@@ -52,67 +52,174 @@ class Visit:
         except ValueError:
             print("Status can only be 0 or 1.")
 
+    @property
+    def address(self):
+        return self._address
+
+    @address.setter
+    def address(self, value):
+        """Checks values of date of birth before assigning"""
+        address = validate.valid_address(value)
+
+        if not isinstance(address, Exception):
+            self._address = address
+
+        else:
+            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+
+    @property
+    def time_earliest(self):
+        return self._time_earliest
+
+    @time_earliest.setter
+    def time_earliest(self, value):
+        """Checks values of time window start before assigning"""
+        time = validate.valid_time(value)
+
+        if not isinstance(time, Exception):
+            self._time_earliest = time
+
+        else:
+            raise ValueError("Please enter a valid time in the format HHMM.\n")
+
+    @property
+    def time_latest(self):
+        return self._time_latest
+
+    @time_latest.setter
+    def time_latest(self, value):
+        """Checks values of time window end before assigning"""
+        time = validate.valid_time(value)
+
+        if not isinstance(time, Exception):
+            self._time_latest = time
+
+        else:
+            raise ValueError("Please enter a valid time in the format HHMM.\n")
+
+    @property
+    def cancel_reason(self):
+        return self._cancel_reason
+
+    @cancel_reason.setter
+    def cancel_reason(self, value):
+        """Checks values of cancel reason before assigning"""
+        reason = validate.valid_cat_list(value, self._c_cancel_reason)
+
+        if not isinstance(reason, Exception):
+            self._cancel_reason = reason
+
+        else:
+            raise ValueError(f"Invalid selection. Value not in {self._c_cancel_reason}")
+
+    @property
+    def sched_status(self):
+        return self._sched_status
+
+    @sched_status.setter
+    def sched_status(self, value):
+        """Checks values of sched status before assigning"""
+        reason = validate.valid_cat_list(value, self._c_sched_status)
+
+        if not isinstance(reason, Exception):
+            self._sched_status = reason
+
+        else:
+            raise ValueError(f"Invalid selection. Value not in {self._c_sched_status}")
+
+    @property
+    def exp_date(self):
+        return self._exp_date.strftime("%d/%m/%Y")
+
+    @exp_date.setter
+    def exp_date(self, value):
+        """Checks values of expected date before assigning"""
+        date = validate.valid_date(value)
+
+        if isinstance(date, Exception):
+            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+
+        elif date < date.today():
+            raise ValueError("Date cannot be before today.\n")
+
+        else:
+            self._exp_date = date
+
     def update_self(self):
         """Allows the user to update visit information, including date/time window or address
             Updates self.date, self.time_earliest, and self.time_latest. Writes updates to file.
             Returns 0 on successful update."""
 
         while True:
-            selection = input("What would you like to update:"
-                              "     1. Visit Date and Time"
-                              "     2. Visit Address")
+            selection = validate.qu_input("What would you like to update:"
+                                          "     1. Visit Date and Time"
+                                          "     2. Visit Address")
 
-            if selection == "q" or "":
+            if not selection:
                 return 0
 
             # Update request date and time
             elif selection == 1:
-                print(f"Please select a new date or leave blank to keep previous date: {self.exp_date}\n")
-                new_date = validate.get_date()
+                attr_list = [
+                    {
+                        "term": f"Expected Date (DD/MM/YYYY). Previous: {self.exp_date if self.exp_date else 'None'}",
+                        "attr": "exp_date"
+                    },
+                    {
+                        "term": f"Start Time Window. Previous: {self.time_earliest if self.time_earliest else 'None'}",
+                        "attr": "time_earliest"
+                    },
+                    {
+                        "term": f"End Time Window. Previous: {self.time_latest if self.time_latest else 'None'}",
+                        "attr": "time_latest"
+                    },
+                ]
 
-                print(f"Please select a new start time window or leave blank to "
-                      f"keep previous start window time: {self.time_earliest}\n")
-                new_start = validate.get_time()
+                # Update all attributes from above. Quit if user quits during any attribute
+                if not validate.get_info(self, attr_list):
+                    self.refresh_self()
+                    return 0
 
-                print(f"Please select a new end time window or leave blank to "
-                      f"keep previous end window time: {self.time_latest}\n")
-                new_end = validate.get_time()
+                detail_dict = {
+                    "Expected Date": self.exp_date,
+                    "Start Time Window": self.time_earliest,
+                    "End Time Window": self.time_latest,
+                }
 
-                valid = validate.yes_or_no("Please confirm that the updated details are correct.\n"
-                                           f"Date: {new_date if new_date else self.exp_date}"
-                                           f"Start Window: {new_start if new_start else self.time_earliest}"
-                                           f"End Window: {new_end if new_end else self.time_latest}")
+                # If user does not confirm info, changes will be reverted.
+                if not validate.confirm_info(self, detail_dict):
+                    self.refresh_self()
+                    return 0
 
-                if valid:
-                    if new_date:
-                        self.exp_date = new_date
+                self.write_self()
 
-                    if new_start:
-                        self.time_earliest = new_start
-
-                    if new_end:
-                        self.time_latest = new_end
-                    self.write_self()
-
-                break
+                return 1
 
             # Update request address
             elif selection == 2:
-                print(f"Please select a new address or leave blank to keep previous address: {self.address}")
-                new_address = validate.get_address()
+                attr_list = [
+                    {
+                        "term": f"Address. Previous: {self.address if self.address else 'None'}",
+                        "attr": "address"
+                    }
+                ]
 
-                valid = validate.yes_or_no("Please confirm that the updated details are correct."
-                                           f"Address: {new_address if new_address else self.address}")
+                # Update all attributes from above. Quit if user quits during any attribute
+                if not validate.get_info(self, attr_list):
+                    self.refresh_self()
+                    return 0
 
-                if valid:
-                    if new_address:
-                        self.address = new_address
-                    self.write_self()
+                detail_dict = {
+                    "Address": self.address
+                }
 
-                break
+                # If user does not confirm info, changes will be reverted.
+                if not validate.confirm_info(self, detail_dict):
+                    self.refresh_self()
+                    return 0
 
-            else:
-                print("Please select a valid option.\n")
+                self.write_self()
+                return 1
 
     def schedule_visit(self):
         pass
@@ -123,71 +230,80 @@ class Visit:
 
     @classmethod
     def create_self(cls):
+        """
+        Object initialized from patient and adds to pat._visits. Loops through each detail and assigns to the object.
+        If any response is blank, the user will be prompted to quit or continue.
+        If they continue, they will begin at the element that the quit out of
+        Once details are completed, the user is prompted to review information and complete creation.
+        :return:
+            1 if the user completes initialization
+            0 if the user does not
+        """
         print("Please select a patient to create a visit request.")
+
+        # Load a patient to generate and attach the request
         pat = classes.person.Patient.load_self()
-        obj = pat.generate_request()
 
-        while True:
-            # Assign address
-            address = validate.get_address()
+        if not pat:
+            return 0
 
-            if address:
-                obj.address = address
+        obj = pat.generate_visit()
 
-            else:
-                if not validate.yes_or_no("You have left this information blank. Would you like to quit?"):
-                    break
-
-            # Assign expected date
-            exp_date = validate.get_date()
-
-            if exp_date:
-                obj.exp_date = exp_date
-
-            else:
-                if not validate.yes_or_no("You have left this information blank. Would you like to quit?"):
-                    break
-
-            # Assign start time window
-            time_earliest = validate.get_time()
-
-            if time_earliest:
-                obj.time_earliest = time_earliest
-
-            else:
-                if not validate.yes_or_no("You have left this information blank. Would you like to quit?"):
-                    break
-
-            # Assign start time window
-            time_latest = validate.get_time()
-
-            if time_latest:
-                obj.time_latest = time_latest
-
-            else:
-                if not validate.yes_or_no("You have left this information blank. Would you like to quit?"):
-                    break
-
-            detail_dict = {
-                "Visit Address": address,
-                "Expected Date": exp_date,
-                "Window Start": time_earliest,
-                "Window End": time_latest
+        attr_list = [
+            {
+                "term": "Address",
+                "attr": "address"
+            },
+            {
+                "term": "Expected Date",
+                "attr": "exp_date"
+            },
+            {
+                "term": "Window Start Time",
+                "attr": "time_earliest",
+            },
+            {
+                "term": "Window End Time",
+                "attr": "time_latest"
             }
+        ]
 
-            # If user confirms information is correct, a new object is created, written, and added to _tracked_instances
-            if validate.confirm_info(obj, detail_dict):
-                pat.write_self()
-                return obj
+        # Update all attributes from above. Quit if user quits during any attribute
+        if not validate.get_info(obj, attr_list):
+            return 0
 
-        print("Record not created.")
-        return 0
+        detail_dict = {
+            "ID": obj.id,
+            "Visit Address": obj.address,
+            "Expected Date": obj.exp_date,
+            "Window Start Time": obj.time_earliest,
+            "Window End Time": obj.time_latest
+        }
 
+        # If user confirms information is correct, a new object is created, written, and added to _tracked_instances
+        if not validate.confirm_info(obj, detail_dict):
+            print("Record not created.")
+            return 0
+
+        pat.write_self()
+        obj.write_self()
+        return obj
+
+    def refresh_self(self):
+        """Refreshes an existing object from file in the in case users need to backout changes. Returns the object"""
+        print("Reverting changes...")
+        in_out.load_obj(self, f"./data/{self.__class__.__name__}/{self.id}.pkl")
 
     @classmethod
     def load_self(cls):
         """Class method to initialise the object from file. Returns the object"""
-        in_out.get_obj(cls)
+        obj = in_out.get_obj(cls)
+
+        if not obj:
+            return 0
+
+        else:
+            return obj
 
     @classmethod
     def load_tracked_instances(cls):
@@ -214,33 +330,45 @@ class Visit:
             return 0
 
         else:
-            reason = validate.get_cat_value(self._c_cancel_reason, "Select a cancel reason. ")
+            attr_list = [
+                {
+                    "term": "Cancel Reason: ",
+                    "attr": "cancel_reason",
+                    "cat_list": self._c_cancel_reason
+                }
+            ]
+
+            # Update all attributes from above. Quit if user quits during any attribute
+            if not validate.get_info(self, attr_list):
+                return 0
 
             prompt = "Are you sure you want to cancel this request? You will be unable to schedule this request."
-            if validate.yes_or_no(prompt):
-                self.cancel_reason = reason
-                self.status = 0
-                self.write_self()
+            if not validate.yes_or_no(prompt):
+                self.refresh_self()
+                return 0
 
-                # Remove visit from patient's list
-                patient = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}")
-                patient.visits.remove(self._id)
-                patient.write_self()
+            self.status = 0
 
-                print("Visit successfully cancelled.")
+            # Remove visit from patient's list
+            patient = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}")
+            patient.visits.remove(self.id)
+            patient.write_self()
+            self.write_self()
 
-                return 1
+            print("Visit successfully cancelled.")
+
+            return 1
 
     @classmethod
-    async def evaluate_requests(cls):
+    def evaluate_requests(cls):
         """Evaluates all Visits and marks them as no shows if they are past their expected date"""
         for instance in cls.tracked_instances:
             try:
-                async with open(f"./data/{cls.__qualname__}/{instance['id']}", "rb") as read_file:
+                with open(f"./data/{cls.__qualname__}/{instance['id']}", "rb") as read_file:
                     request = pickle.load(read_file)
 
                     # Evaluate date against current date and mark as expired if due before current date
-                    if datetime.strptime(request.exp_date, '%m-%d-%Y').date() < date.today():
+                    if datetime.strptime(request.exp_date, '%d-%m-%Y').date() < date.today():
                         request.status = 0
                         request.cancel_reason = cls._c_cancel_reason[3]
                         cls.write_self(request)

@@ -10,19 +10,19 @@ def write_obj(obj):
     Writes the object to file as a JSON using the pickle module
     Adds/updates the tracked instances class attribute
     """
-    with open(f"./data/{obj.__class__.__name__}/{obj._id}.pkl", "wb") as file:
+    with open(f"./data/{obj.__class__.__name__}/{obj.id}.pkl", "wb") as file:
         pickle.dump(obj, file)
 
     # Update tracked instance dictionary with new value (overwrites old values). Varies type of object.
     if isinstance(obj, classes.person.Human):
-        obj._tracked_instances[obj._id] = {"status": obj.status,
-                                            "name": obj._name,
-                                           "dob": obj.dob,
-                                           "sex": obj.sex}
+        obj._tracked_instances[obj.id] = {"status": obj._status,
+                                          "name": obj._name,
+                                          "dob": obj._dob,
+                                          "sex": obj._sex}
 
     else:
-        obj._tracked_instances[obj._id] = {"status": obj.status,
-                                            "name": obj._name}
+        obj._tracked_instances[obj.id] = {"status": obj._status,
+                                          "name": obj._name}
 
     print(f"{obj.__class__.__name__} successfully saved.\n")
 
@@ -35,10 +35,10 @@ def get_obj(cls):
 
     while True:
         obj_id = 0
-        obj = input("Name or ID: ")
+        obj = validate.qu_input("Name or ID: ")
 
         # Quit if q or blank is entered
-        if obj == 'q' or not obj:
+        if not obj:
             return 0
 
         # Prompt and flag for including inactive records
@@ -92,14 +92,13 @@ def load_tracked_obj(cls):
 
         # Update tracked instance dictionary with new value (overwrites old values).
         if isinstance(cls, classes.person.Human):
-            cls._tracked_instances[obj._id] = {"status": obj.status,
-                                               "name": obj.name,
-                                               "dob": obj.dob}
+            cls._tracked_instances[obj.id] = {"status": obj.status,
+                                              "name": obj.name,
+                                              "dob": obj.dob}
 
         else:
-            cls._tracked_instances[obj._id] = {"status": obj.status,
-                                               "name": obj.name}
-
+            cls._tracked_instances[obj.id] = {"status": obj.status,
+                                              "name": obj.name}
 
     except FileNotFoundError:
         print(f"{cls.__qualname__} could not be found.")

@@ -1,11 +1,7 @@
 # This file contains functions to be used in the creating the GUI.
 # Stick with TUI for now, but launch completed map into web-browser or GUI
-import classes.person
 import validate
 import os
-from classes.person import Patient
-from classes.team import Team
-from classes.visits import Visit
 
 
 def clear():
@@ -34,9 +30,9 @@ def main_menu(class_list):
 
         try:
 
-            selection = input("Selection: ")
+            selection = validate.qu_input("Selection: ")
 
-            if selection == "q" or not selection:
+            if not selection:
                 return 0
 
             elif selection == "1":
@@ -69,11 +65,7 @@ def obj_menu(class_list):
         cls = class_selection(class_list)
 
         if not cls:
-            if validate.yes_or_no("Select a new class? "):
-                continue
-
-            else:
-                return 0
+            return 0
 
         while True:
             # Prompt user for object details and load object
@@ -88,7 +80,7 @@ def obj_menu(class_list):
                 create_object_director(cls)
 
             if not validate.yes_or_no("Search for another object? "):
-                return 0
+                break
 
 
 def class_selection(class_list):
@@ -101,16 +93,21 @@ def class_selection(class_list):
     selection_list = [cat.__name__ for cat in class_list]
 
     prompt = "Which type of record would you like to create/modify?"
-    selection = validate.get_cat_value(selection_list, prompt)
+    validate.print_cat_value(selection_list, prompt)
 
-    if selection:
+    while True:
+        selection = validate.qu_input("Selection: ")
+
+        if not selection:
+            return 0
+
+        # Validate that user passed a valid class
+        selection = validate.valid_cat_list(selection, selection_list)
+
         # Convert selection back to the class object by using the matching index in the string list
-        selection = class_list[selection_list.index(selection)]
+        cls = class_list[selection_list.index(selection)]
 
-        return selection
-
-    else:
-        return 0
+        return cls
 
 
 def create_object_director(cls):
@@ -126,9 +123,7 @@ def create_object_director(cls):
 
     if cont:
         obj = cls.create_self()
-
-        if obj:
-            cls.write_self()
+        return obj
 
 
 def inact_or_modify(obj):
@@ -140,7 +135,7 @@ def inact_or_modify(obj):
     """
     while True:
         clear()
-        print(f"ID: {obj._id} \n"
+        print(f"ID: {obj.id} \n"
               f"Name: {obj.name}\n"
               f"\n"
               f"Please select an option from the list below:\n"
@@ -148,9 +143,9 @@ def inact_or_modify(obj):
               f"2) Delete\n")
 
         try:
-            selection = input("Option: ")
+            selection = validate.qu_input("Option: ")
 
-            if selection == "q" or not selection:
+            if not selection:
                 return 0
 
             elif int(selection) == 1:

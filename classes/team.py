@@ -7,13 +7,13 @@ import classes
 
 class Team:
     team_id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
-    tracked_instances = {}
+    _tracked_instances = {}
 
     def __init__(self, status=1, name=None, address=None):
         """Initializes a new request and links with pat_id. It contains the following attributes:
             req_id, pat_id, name, status, address, the earliest time, latest time, sched status, and cancel_reason"""
         self._id = next(self.team_id_iter)
-        self.name = name
+        self._name = name
         self._status = status
         self._pat_id = []
         self._clin_id = []
@@ -48,6 +48,21 @@ class Team:
     def pat_load(self):
         return len(self._pat_id)
 
+    @property
+    def address(self):
+        return self._address
+
+    @address.setter
+    def address(self, value):
+        """Checks values of date of birth before assigning"""
+        address = validate.valid_address(value)
+
+        if not isinstance(address, Exception):
+            self._address = address
+
+        else:
+            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+
     def update_self(self):
         """Allows the user to update team information"""
         pass
@@ -58,42 +73,61 @@ class Team:
 
     @classmethod
     def create_self(cls):
+        """
+        Loops through each detail and assigns to the object.
+        If any response is blank, the user will be prompted to quit or continue.
+        If they continue, they will begin at the element that the quit out of
+        Once details are completed, the user is prompted to review information and complete creation.
+        :return:
+            1 if the user completes initialization
+            0 if the user does not
+        """
         obj = cls()
 
-        while True:
-            # Assign name
-            name = input("Name: ")
-
-            if name:
-                obj.name = name
-
-            else:
-                if not validate.yes_or_no("You have left this information blank. Would you like to quit?"):
-                    break
-
-            # Assign address
-            address = validate.get_address()
-
-            if address:
-                obj.address = address
-
-            else:
-                if not validate.yes_or_no("You have left this information blank. Would you like to quit?"):
-                    break
-
-            detail_dict = {
-                "First Name": obj.name,
-                "Address": obj.address
+        attr_list = [
+            {
+                "term": "Name",
+                "attr": "name"
+            },
+            {
+                "term": "Address",
+                "attr": "address"
             }
+        ]
 
-            # If user confirms information is correct, a new object is created, written, and added to _tracked_instances
-            if validate.confirm_info(obj, detail_dict):
-                return obj
+        # Update all attributes from above. Quit if user quits during any attribute
+        if not validate.get_info(obj, attr_list):
+            return 0
+
+        detail_dict = {
+            "ID": obj.id,
+            "Name": obj.name,
+            "Address": obj.address
+        }
+
+        # If user confirms information is correct, a new object is created, written, and added to _tracked_instances
+        if not validate.confirm_info(obj, detail_dict):
+            print("Record not created.")
+            return 0
+
+        obj.write_self()
+        return obj
+
+    def refresh_self(self):
+        """Refreshes an existing object from file in the in case users need to back out changes. Returns the object"""
+        print("Reverting changes...")
+        in_out.load_obj(self, f"./data/{self.__class__.__name__}/{self.id}.pkl")
 
     @classmethod
     def load_self(cls):
         """Class method to initialise the object from file. Returns the object"""
-        in_out.get_obj(cls)
+        obj = in_out.get_obj(cls)
+
+        if not obj:
+            return 0
+
+        else:
+            return obj
 
     @classmethod
     def load_tracked_instances(cls):

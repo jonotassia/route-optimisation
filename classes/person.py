@@ -3,7 +3,7 @@ import itertools
 import validate
 import in_out
 import classes
-from datetime import datetime, time
+from datetime import time
 
 # TODO: Determine best way to generate Visits that are not tied to a date, but relative to days of week
 
@@ -14,18 +14,15 @@ class Human:
     _tracked_instances = {}
     _c_sex_options = ("male", "female", "not specified")
 
-    def __init__(self, status=1, first_name="", last_name="", middle_name="", dob="", sex="", address=""):
+    def __init__(self, status=1, name=("Last", "First", "Middle"), dob="", sex="", address=""):
         """Initiates a human objects with the following attributes:
         id, first name, last name, middle name, date of birth, sex, and address."""
         self._id = next(self._new_hum_iter)
         self._status = status
-        self.first_name = first_name
-        self.last_name = last_name
-        self.middle_name = middle_name
-        self._name = None
+        self._name = name
         self._dob = dob
         self._sex = sex
-        self.address = address
+        self._address = address
         self._team_id = None
         self._team_name = None
 
@@ -42,31 +39,59 @@ class Human:
         """Checks values of sex before assigning"""
         try:
             if value == 1 or 0:
-                self.status = value
+                self._status = value
 
             else:
-                raise ValueError
+                raise ValueError("Status can only be 0 or 1.")
 
-        except ValueError:
-            print("Status can only be 0 or 1.")
+        except ValueError as err:
+            print(err)
 
     @property
     def name(self):
-        return self.last_name, ", ", self.first_name, self.middle_name
+        try:
+            name = self._name[0], ",", self._name[1], self._name[2]
+            return name
+
+        except IndexError:
+            return None
+
+    @name.setter
+    def name(self, value):
+        name = validate.valid_name(value)
+
+        if not isinstance(name, Exception):
+            self._name = name
+
+        else:
+            raise ValueError("Please provide a valid name in the format LAST, FIRST MIDDLE")
+
+    @property
+    def last_name(self):
+        return self.name[0]
+
+    @property
+    def first_name(self):
+        return self.name[1]
+
+    @property
+    def middle_name(self):
+        return self.name[2]
 
     @property
     def dob(self):
-        return self._dob
+        return self._dob.strftime("%d/%m/%Y")
 
     @dob.setter
     def dob(self, value):
         """Checks values of date of birth before assigning"""
-        try:
-            value = datetime.strptime(value, "%d/%m/%Y").date()
-            self.dob = value
+        dob = validate.valid_date(value)
 
-        except ValueError:
-            print("Please enter a valid date in the format DD/MM/YYYY.\n")
+        if not isinstance(dob, Exception):
+            self._dob = dob
+
+        else:
+            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
 
     @property
     def sex(self):
@@ -75,19 +100,43 @@ class Human:
     @sex.setter
     def sex(self, value):
         """Checks values of sex before assigning"""
-        try:
-            if value.lower() in self._c_sex_options:
-                self.sex = self._c_sex_options
+        sex = validate.valid_cat_list(value, self._c_sex_options)
 
-            else:
-                raise ValueError
+        if not isinstance(sex, Exception):
+            self._sex = sex
 
-        except ValueError:
-            print(f"Invalid selection. Value not in {self._c_sex_options}")
+        else:
+            raise ValueError(f"Invalid selection. Value not in {self._c_sex_options}")
 
-    # TODO: add address with checks to list of class properties.
+    @property
+    def address(self):
+        return self._address
 
-    # TODO: Confirm team_name property is needed or if it can just be handled in the assign_team method
+    @address.setter
+    def address(self, value):
+        """Checks values of date of birth before assigning"""
+        address = validate.valid_address(value)
+
+        if not isinstance(address, Exception):
+            self._address = address
+
+        else:
+            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+
+    @property
+    def team_id(self):
+
+        return self._team_name
+
+    @team_id.setter
+    def team_id(self, value):
+        """Checks that team id is in instance list before assigning"""
+        if value in classes.team.Team.tracked_instances.keys():
+            self._team_id = value
+
+        else:
+            raise ValueError(f"Invalid selection. Team does not exist.")
+
     @property
     def team_name(self):
         self._team_name = classes.team.Team.tracked_instances[self._team_id]["name"]
@@ -96,7 +145,7 @@ class Human:
     @classmethod
     def create_self(cls):
         """
-        Loops through each basic demographic detail and assigns to the object.
+        Loops through each detail and assigns to the object.
         If any response is blank, the user will be prompted to quit or continue.
         If they continue, they will begin at the element that the quit out of
         Once details are completed, the user is prompted to review information and complete creation.
@@ -104,76 +153,67 @@ class Human:
             1 if the user completes initialization
             0 if the user does not
         """
-        # TODO: Use a dictionary to loop through attributes to set in a separate function
         obj = cls()
 
-        while True:
-            # Assign name
-            name = validate.get_name()
-
-            if name:
-                obj.first_name = name[0]
-                obj.last_name = name[1]
-                obj.middle_name = name[2]
-
-            else:
-                if not validate.yes_or_no("You have left this information blank. Would you like to quit?"):
-                    break
-
-            # Assign dob
-            dob = validate.get_date(date_of_birth=1)
-
-            if dob:
-                obj._dob = dob
-
-            else:
-                if not validate.yes_or_no("You have left this information blank. Would you like to quit?"):
-                    break
-
-            # Assign sex
-            sex = validate.get_cat_value(cls._c_sex_options, "Please select a sex from the list below: ")
-
-            if sex:
-                obj._sex = sex
-
-            else:
-                if not validate.yes_or_no("You have left this information blank. Would you like to quit?"):
-                    break
-
-            # Assign address
-            address = validate.get_address()
-
-            if address:
-                obj.address = address
-
-            else:
-                if not validate.yes_or_no("You have left this information blank. Would you like to quit?"):
-                    break
-
-            detail_dict = {
-                "First Name": obj.first_name,
-                "Middle Name": obj.middle_name,
-                "Last Name": obj.last_name,
-                "Date of Birth": obj.dob,
-                "Sex": obj.sex,
-                "Address": obj.address
+        attr_list = [
+            {
+                "term": "Name (LAST, FIRST MIDDLE)",
+                "attr": "name"
+            },
+            {
+                "term": "Date of Birth",
+                "attr": "dob"
+            },
+            {
+                "term": "Sex",
+                "attr": "sex",
+                "cat_list": obj._c_sex_options
+            },
+            {
+                "term": "Address",
+                "attr": "address"
             }
+        ]
 
-            # If user confirms information is correct, a new object is created, written, and added to _tracked_instances
-            if validate.confirm_info(obj, detail_dict):
-                return obj
+        # Update all attributes from above. Quit if user quits during any attribute
+        if not validate.get_info(obj, attr_list):
+            return 0
 
-        print("Record not created.")
-        return 0
+        detail_dict = {
+            "ID": obj.id,
+            "Name": obj.name,
+            "Date of Birth": obj.dob,
+            "Sex": obj.sex,
+            "Address": obj.address
+        }
+
+        # If user confirms information is correct, a new object is created, written, and added to _tracked_instances
+        if not validate.confirm_info(obj, detail_dict):
+            print("Record not created.")
+            return 0
+
+        obj.write_self()
+        return obj
 
     def write_self(self):
         """Writes the object to file as a JSON using the pickle module"""
         in_out.write_obj(self)
 
+    def refresh_self(self):
+        """Refreshes an existing object from file in the in case users need to backout changes. Returns the object"""
+        print("Reverting changes...")
+        in_out.load_obj(self, f"./data/{self.__class__.__name__}/{self.id}.pkl")
+
     @classmethod
     def load_self(cls):
         """Class method to initialise the object from file. Returns the object"""
-        in_out.get_obj(cls)
+        obj = in_out.get_obj(cls)
+
+        if not obj:
+            return 0
+
+        else:
+            return obj
 
     @classmethod
     def load_tracked_instances(cls):
@@ -187,26 +227,71 @@ class Patient(Human):
     _tracked_instances = {}
     _c_inactive_reason = ("no longer under care", "expired", "added in error")
 
-    def __init__(self, status=1, first_name="", last_name="", middle_name="", dob="", sex="", address=""):
+    def __init__(self, status=1, name="", dob="", sex="", address=""):
         """
         Initiates and writes-to-file a patient with the following attributes:
         id, first name, last name, middle name, date of birth, sex, and address.
         Additionally, initializes a list of Visits linked to the patient
         """
-        super().__init__(status, first_name, last_name, middle_name, dob, sex, address)
+        super().__init__(status, name, dob, sex, address)
 
         self._id = next(self._new_pat_iter)
-        self.inactive_reason = None
+        self._inactive_reason = None
         self.visits = []
-        self.death_date = None
-        self.death_time = None
+        self._death_date = None
+        self._death_time = None
+
+    @property
+    def inactive_reason(self):
+        return self._inactive_reason
+
+    @inactive_reason.setter
+    def inactive_reason(self, value):
+        """Checks values of inactive reason before assigning"""
+        reason = validate.valid_cat_list(value, self._c_inactive_reason)
+
+        if reason:
+            self._inactive_reason = reason
+
+        else:
+            raise ValueError(f"Invalid selection. Value not in {self._c_inactive_reason}")
+
+    @property
+    def death_date(self):
+        return self._death_date.strftime("%d/%m/%Y")
+
+    @death_date.setter
+    def death_date(self, value):
+        """Checks values of date of death before assigning"""
+        date = validate.valid_date(value)
+
+        if date:
+            self._death_date = date
+
+        else:
+            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+
+    @property
+    def death_time(self):
+        return self._death_time
+
+    @death_time.setter
+    def death_time(self, value):
+        """Checks values of date of time before assigning"""
+        time = validate.valid_time(value)
+
+        if time:
+            self._death_time = time
+
+        else:
+            raise ValueError("Please enter a valid time in the format HHMM.\n")
 
     def update_patient_address(self):
         """Updates the patient's address. Updates self.address. Writes updates to file.
             Returns 0 on successful update."""
 
         print(f"Please enter a new address or leave blank to enter previous start time: {self.address}\n")
-        new_address = validate.get_address()
+        new_address = validate.valid_address(validate.qu_input("Address: "))
 
         valid = validate.yes_or_no("Please confirm that the updated details are correct.\n"
                                    f"Address: {new_address if new_address else self.address}")
@@ -235,7 +320,7 @@ class Patient(Human):
         # TODO: Determine how to incorporate the concept of skills
 
         new_visit = classes.visits.Visit(self.id)
-        self.visits.append(new_visit._id)
+        self.visits.append(new_visit.id)
 
         return new_visit
 
@@ -257,7 +342,7 @@ class Patient(Human):
             return 0
 
         # Checks if the patient has active visits associated with them and prompt user to cancel or quit.
-        elif self.visits:
+        if self._visits:
             prompt = """This patient has active appointments. 
                         Proceeding will cancel all requests. 
                         Are you sure you want to continue?"""
@@ -265,27 +350,43 @@ class Patient(Human):
             if not validate.yes_or_no(prompt):
                 return 0
 
-        else:
-            reason = validate.get_cat_value(self._c_inactive_reason, "Select an inactive reason. ")
+        attr_list = [
+            {
+                "term": "Inactivation Reason: ",
+                "attr": "inactive_reason",
+                "cat_list": self._c_inactive_reason
+            }
+        ]
 
-            # Ensure death_date and death_time are initialized for assignment later, even if reason is not death.
-            death_date = self.death_date
-            death_time = self.death_time
+        if not validate.get_info(self, attr_list):
+            self.refresh_self()
+            return 0
 
-            # If reason is death, request death date and time, but don't assign until user confirms inactivation.
-            if reason == self._c_inactive_reason[1]:
-                print("Please enter a death date and time.\n")
-                death_date = validate.get_date()
-                death_time = validate.get_time()
+        # If reason is death, request death date and time, but don't assign until user confirms inactivation.
+        if self.inactive_reason == self._c_inactive_reason[1]:
+            print("Please enter a death date and time.\n")
 
-            prompt = "Are you sure you want to inactivate this record?"
-            if validate.yes_or_no(prompt):
-                self.inactive_reason = reason
-                self.status = 0
-                self.death_date = death_date
-                self.death_time = death_time
+            attr_list = [
+                {
+                    "term": "Death Date: ",
+                    "attr": "death_date"
+                },
+                {
+                    "term": "Death Time",
+                    "attr": "death_time"
+                }
+            ]
 
-                # Cancel linked visit requests with a reason of system action
+            # Update all attributes from above. Quit if user quits during any attribute
+            if not validate.get_info(self, attr_list):
+                self.refresh_self()
+                return 0
+
+        prompt = "Are you sure you want to inactivate this record?"
+        if validate.yes_or_no(prompt):
+            # Cancel linked visit requests with a reason of system action. This occurs here rather than above to
+            # give user the opportunity to back out changes before cancelling visits.
+            if self.visits:
                 for visit_id in self.visits:
                     visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}")
 
@@ -296,18 +397,23 @@ class Patient(Human):
 
                     print("Visits successfully cancelled.")
 
-                # Remove from team
-                team = in_out.load_obj(classes.team.Team, f"./data/Team/{self._team_id}")
-                team._pat_id.remove(self.id)
+            # Remove from team
+            if self.team_id:
+                team = in_out.load_obj(classes.team.Team, f"./data/Team/{self.team_id}")
+                team.pat_id.remove(self.id)
                 team.write_self()
 
                 print("Team successfully unlinked.")
 
-                self.write_self()
+            self.write_self()
 
-                print("Record successfully inactivated.")
+            print("Record successfully inactivated.")
 
-                return 1
+            return 1
+
+        else:
+            self.refresh_self()
+            return 0
 
 
 class Clinician(Human):
@@ -318,20 +424,95 @@ class Clinician(Human):
     # TODO: Determine how to incorporate the concept of skills
     # TODO: Add licensure as an attribute
 
-    def __init__(self, status=1, first_name="", last_name="", middle_name="", dob="", sex="", address=""):
+    def __init__(self, status=1, name="", dob="", sex="", address=""):
         """Initiates and writes-to-file a clinician with the following attributes:
         id, first name, last name, middle name, date of birth, sex, and address
         Assumes standard shift time for start and end time, and inherits address for start/end address.
         These will be updated by a different function called update_start_end"""
 
-        super().__init__(status, first_name, last_name, middle_name, dob, sex, address)
+        super().__init__(status, name, dob, sex, address)
 
         self._id = next(self._clin_id_iter)
-        self.start_address = address
-        self.end_address = address
-        self.start_time = time(9)
-        self.end_time = time(17)
-        self.inactive_reason = None
+        self._start_address = address
+        self._end_address = address
+        self._start_time = time(9)
+        self._end_time = time(17)
+        self._inactive_reason = None
+
+    @property
+    def inactive_reason(self):
+        return self._inactive_reason
+
+    @inactive_reason.setter
+    def inactive_reason(self, value):
+        """Checks values of inactive reason before assigning"""
+        reason = validate.valid_cat_list(value, self._c_inactive_reason)
+
+        if reason:
+            self._inactive_reason = reason
+
+        else:
+            raise ValueError(f"Invalid selection. Value not in {self._c_inactive_reason}")
+
+    @property
+    def start_address(self):
+        return self._start_address
+
+    @start_address.setter
+    def start_address(self, value):
+        """Checks values of date of birth before assigning"""
+        address = validate.valid_address(value)
+
+        if address:
+            self._start_address = address
+
+        else:
+            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+
+    @property
+    def end_address(self):
+        return self._end_address
+
+    @end_address.setter
+    def end_address(self, value):
+        """Checks values of date of birth before assigning"""
+        address = validate.valid_address(value)
+
+        if address:
+            self._end_address = address
+
+        else:
+            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+
+    @property
+    def start_time(self):
+        return self._start_time
+
+    @start_time.setter
+    def start_time(self, value):
+        """Checks values of start time before assigning"""
+        time = validate.valid_time(value)
+
+        if time:
+            self._start_time = time
+
+        else:
+            raise ValueError("Please enter a valid time in the format HHMM.\n")
+
+    @property
+    def end_time(self):
+        return self._end_time
+
+    @end_time.setter
+    def end_time(self, value):
+        """Checks values of end time before assigning"""
+        time = validate.valid_time(value)
+
+        if time:
+            self._end_time = time
+
+        else:
+            raise ValueError("Please enter a valid time in the format HHMM.\n")
 
     def assign_team(self):
         """Assigns the clinician to a team so that they can be considered in that team's route calculation"""
@@ -346,37 +527,43 @@ class Clinician(Human):
             Updates self.start_time, self.start_address, self.end_time, and self.end_address. Writes updates to file.
             Returns 0 on successful update."""
 
-        print(f"Please select a new shift start time or leave blank to keep previous start time: {self.start_time}\n")
-        new_start_time = validate.get_time()
+        attr_list = [
+            {
+                "term": f"Start Time (HHMM). Previous: {self.start_time if self.start_time else 'None'}",
+                "attr": "start_time"
+            },
+            {
+                "term": f"Start Address. Previous: {self.start_address if self.start_address else 'None'}",
+                "attr": "start_address"
+            },
+            {
+                "term": f"End Time (HHMM). Previous: {self.end_time if self.end_time else 'None'}",
+                "attr": "end_time"
+            },
+            {
+                "term": f"End Address. Previous: {self.end_address if self.end_address else 'None'}",
+                "attr": "end_address"
+            }
+        ]
 
-        print(f"Please select a new start address or leave blank to keep previous address: {self.start_address}\n")
-        new_start_address = validate.get_address()
+        # Update all attributes from above. Quit if user quits during any attribute
+        if not validate.get_info(self, attr_list):
+            self.refresh_self()
+            return 0
 
-        print(f"Please select a new shift end time or leave blank to keep previous end time: {self.end_time}\n")
-        new_end_time = validate.get_time()
+        detail_dict = {
+            "Start Time": self.start_time,
+            "Start Address": self.start_address,
+            "End Time": self.end_time,
+            "End Address": self.end_address
+        }
 
-        print(f"Please select a new end address or leave blank to keep previous address: {self.end_address}\n")
-        new_end_address = validate.get_address()
+        # If user does not confirm info, changes will be reverted.
+        if not validate.confirm_info(self, detail_dict):
+            self.refresh_self()
+            return 0
 
-        valid = validate.yes_or_no("Please confirm that the updated details are correct.\n"
-                                   f"Start Time: {new_start_time if new_start_time else self.start_time}"
-                                   f"Start Address: {new_start_address if new_start_address else self.start_address}"
-                                   f"End Time: {new_end_time if new_end_time else self.end_time}"
-                                   f"End Address: {new_end_address if new_end_address else self.end_address}")
-        if valid:
-            if new_start_time:
-                self.start_time = new_start_time
-
-            if new_start_address:
-                self.start_address = new_start_address
-
-            if new_end_time:
-                self.end_time = new_end_time
-
-            if new_end_address:
-                self.end_address = new_end_address
-
-            self.write_self()
+        self.write_self()
 
         return 1
 
@@ -396,16 +583,25 @@ class Clinician(Human):
             return 0
 
         else:
-            reason = validate.get_cat_value(self._c_inactive_reason, "Select an inactive reason. ")
+            attr_list = [
+                {
+                    "term": "Inactivation Reason: ",
+                    "attr": "inactive_reason",
+                    "cat_list": self._c_inactive_reason
+                }
+            ]
+
+            if not validate.get_info(self, attr_list):
+                self.refresh_self()
+                return 0
 
             prompt = "Are you sure you want to inactivate this record?"
             if validate.yes_or_no(prompt):
-                self.inactive_reason = reason
                 self.status = 0
 
                 # Remove from team
                 team = in_out.load_obj(classes.team.Team, f"./data/Team/{self._team_id}")
-                team._clin_id.remove(self.id)
+                team.clin_id.remove(self.id)
                 team.write_self()
 
                 print("Team successfully unlinked.")
