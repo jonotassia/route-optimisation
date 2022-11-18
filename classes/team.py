@@ -3,6 +3,7 @@ import itertools
 import validate
 import in_out
 import classes
+import navigation
 
 
 class Team:
@@ -31,8 +32,8 @@ class Team:
     def status(self, value):
         """Checks values of sex before assigning"""
         try:
-            if value == 1 or 0:
-                self.status = value
+            if value == 1 or value == 0:
+                self._status = value
 
             else:
                 raise ValueError
@@ -65,27 +66,37 @@ class Team:
 
     def update_self(self):
         """
-        Allows the user to update team information, including name, address"""
+        Allows the user to update team information, including name, address
+        """
+        navigation.clear()
+        print(f"ID: {self.id}".ljust(10), f"Name: {self._name}\n".rjust(10))
+
         while True:
-            selection = validate.qu_input("What would you like to do:"
-                                          "     1. Update Name"
-                                          "     2. Update Address"
-                                          "     3. Inactivate Record")
+            selection = validate.qu_input("What would you like to do:\n"
+                                          "     1. Update Name\n"
+                                          "     2. Update Address\n"
+                                          "     3. Inactivate Record\n"
+                                          "\n"
+                                          "Selection: ")
 
             if not selection:
                 return 0
 
             # Update request date and time
-            elif selection == 1:
+            elif selection == "1":
                 self.update_name()
 
             # Update request address
-            elif selection == 2:
+            elif selection == "2":
                 self.update_address()
 
             # Inactivate record
-            elif selection == 3:
+            elif selection == "3":
                 self.inactivate_self()
+                return 0
+
+            else:
+                print("Invalid selection.")
 
     def update_name(self):
         """
@@ -147,8 +158,9 @@ class Team:
         return 1
 
     def write_self(self):
-        """Writes the object to file as a JSON using the pickle module"""
-        in_out.write_obj(self)
+        """Writes the object to file as a .pkl using the pickle module"""
+        if in_out.write_obj(self):
+            return 1
 
     @classmethod
     def create_self(cls):
@@ -166,7 +178,7 @@ class Team:
         attr_list = [
             {
                 "term": "Name",
-                "attr": "name"
+                "attr": "_name"
             },
             {
                 "term": "Address",
@@ -180,7 +192,7 @@ class Team:
 
         detail_dict = {
             "ID": obj.id,
-            "Name": obj.name,
+            "Name": obj._name,
             "Address": obj.address
         }
 
@@ -195,7 +207,7 @@ class Team:
     def refresh_self(self):
         """Refreshes an existing object from file in the in case users need to back out changes. Returns the object"""
         print("Reverting changes...")
-        in_out.load_obj(self, f"./data/{self.__class__.__name__}/{self.id}.pkl")
+        in_out.load_obj(type(self), f"./data/{self.__class__.__name__}/{self.id}.pkl")
 
     @classmethod
     def load_self(cls):
@@ -225,36 +237,51 @@ class Team:
 
         # Checks if the team has active patients or clinicians linked to it and prompt user to cancel or quit.
         elif self._pat_id or self._clin_id:
-            prompt = """This team is linked to at least one patient or clinician. 
-                        Proceeding will unlink all patients and clinicians. 
-                        Are you sure you want to continue?"""
+            prompt = ("This team is linked to at least one patient or clinician.\n"
+                      "Proceeding will unlink all patients and clinicians.\n"
+                      "Are you sure you want to continue?\n")
 
             if not validate.yes_or_no(prompt):
                 return 0
 
         else:
             prompt = "Are you sure you want to inactivate this record?"
+            if not validate.yes_or_no(prompt):
+                return 0
 
-            if validate.yes_or_no(prompt):
-                self.status = 0
+        self.status = 0
 
-                # Remove team from patients and clinicians
-                if self._pat_id:
-                    for pat_id in self._pat_id:
-                        pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{pat_id}")
-                        pat.team = None
-                        pat.write_self()
+        # Remove team from patients and clinicians
+        if self._pat_id:
+            for pat_id in self._pat_id:
+                pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{pat_id}.pkl")
 
-                if self._clin_id:
-                    for clin_id in self._clin_id:
-                        clin = in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{clin_id}")
-                        clin.team = None
-                        clin.write_self()
+                # If any linked patients fail to load, refresh and cancel action.
+                if not pat:
+                    print("Unable to load linked patient.")
+                    self.refresh_self()
+                    return 0
 
-                self.write_self()
-                print("Record successfully inactivated.")
+                pat.team_id = None
+                pat.write_self()
 
-                return 1
+        if self._clin_id:
+            for clin_id in self._clin_id:
+                clin = in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{clin_id}.pkl")
+
+                # If any linked clinicians fail to load, refresh and cancel action.
+                if not clin:
+                    print("Unable to load linked clinician.")
+                    self.refresh_self()
+                    return 0
+
+                clin.team_id = None
+                clin.write_self()
+
+        self.write_self()
+        print("Record successfully inactivated.")
+
+        return 1
 
     def assign_routes(self):
         """Considers availability of all Patient and number of Visit to book and allocates appropriately"""

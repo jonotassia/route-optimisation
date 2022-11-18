@@ -71,9 +71,10 @@ def obj_menu(class_list):
             # Prompt user for object details and load object
             obj = cls.load_self()
 
-            # If object exists, send user to modification screen
+            # If object exists, send user to modification screen. If record inactivated, quit.
             if obj:
-                obj.update_self()
+                if not obj.update_self():
+                    return 0
 
             # If object does not exist, prompt user to create object as appropriate based on class.
             else:

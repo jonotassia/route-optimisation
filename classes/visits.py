@@ -4,6 +4,7 @@ import itertools
 import validate
 import in_out
 import classes
+import navigation
 from datetime import datetime, date
 
 
@@ -13,7 +14,7 @@ class Visit:
     _c_sched_status = ("unscheduled", "scheduled", "no show", "cancelled")
     _c_cancel_reason = ("clinician unavailable", "patient unavailable", "no longer needed", "expired", "system action")
 
-    def __init__(self, pat_id, status=1, sched_status="", address="", time_earliest="", time_latest="", exp_date=""):
+    def __init__(self, pat_id, status=1, sched_status="unscheduled", address="", time_earliest="", time_latest="", exp_date=""):
         """Initializes a new request and links with pat_id. It contains the following attributes:
             req_id, pat_id, name, status, address, the earliest time, latest time, sched status, and cancel_reason"""
         self._id = next(self._id_iter)
@@ -33,7 +34,7 @@ class Visit:
 
     @property
     def name(self):
-        return "Visit" + str(self._id)
+        return "Visit " + str(self._id)
 
     @property
     def status(self):
@@ -43,8 +44,8 @@ class Visit:
     def status(self, value):
         """Checks values of status before assigning"""
         try:
-            if value == 1 or 0:
-                self.status = value
+            if value == 1 or value == 0:
+                self._status = value
 
             else:
                 raise ValueError
@@ -89,11 +90,20 @@ class Visit:
     @time_latest.setter
     def time_latest(self, value):
         """Checks values of time window end before assigning"""
+        # TODO: Figure out how to handle the midnight instance in time window and scheduling
         time = validate.valid_time(value)
 
         if not isinstance(time, Exception):
-            self._time_latest = time
+            # If there is no start time window (unlikely), allow end time window to be set.
+            if not self.time_earliest:
+                self._time_latest = time
 
+            # If there is a start time window and it is before the start time, allow it to be set.
+            if self.time_earliest and time > self.time_earliest:
+                self._time_latest = time
+
+            else:
+                raise ValueError("End time cannot be before start time.")
         else:
             raise ValueError("Please enter a valid time in the format HHMM.\n")
 
@@ -148,26 +158,31 @@ class Visit:
     def update_self(self):
         """Allows the user to update visit information, including date/time window or address.
             Returns 0 on successful update."""
+        navigation.clear()
+        print(f"ID: {self.id}".ljust(10), f"Name: {self.name}\n".rjust(10))
 
         while True:
-            selection = validate.qu_input("What would you like to do:"
-                                          "     1. Modify Visit Date and Time"
-                                          "     2. Modify Visit Address"
-                                          "     3. Inactivate Record")
+            selection = validate.qu_input("What would you like to do:\n"
+                                          "     1. Modify Visit Date and Time\n"
+                                          "     2. Modify Visit Address\n"
+                                          "     3. Inactivate Record\n"
+                                          "\n"
+                                          "Selection: ")
 
             if not selection:
                 return 0
 
             # Update request date and time
-            elif selection == 1:
+            elif selection == "1":
                 self.update_date_time()
 
             # Update request address
-            elif selection == 2:
+            elif selection == "2":
                 self.update_address()
 
-            elif selection == 3:
+            elif selection == "3":
                 self.inactivate_self()
+                return 0
 
             else:
                 print("Invalid selection.")
@@ -245,29 +260,34 @@ class Visit:
         pass
 
     def write_self(self):
-        """Writes the object to file as a JSON using the pickle module"""
-        in_out.write_obj(self)
+        """Writes the object to file as a .pkl using the pickle module"""
+        if in_out.write_obj(self):
+            return 1
 
     @classmethod
-    def create_self(cls):
+    def create_self(cls, pat_id=""):
         """
-        Object initialized from patient and adds to pat._visits. Loops through each detail and assigns to the object.
+        Object initialized from patient and adds to pat._visits.
+        Loops through each detail and assigns to the object.
         If any response is blank, the user will be prompted to quit or continue.
         If they continue, they will begin at the element that the quit out of
         Once details are completed, the user is prompted to review information and complete creation.
         :return:
-            1 if the user completes initialization
+            obj if the user completes initialization
             0 if the user does not
         """
-        print("Please select a patient to create a visit request.")
+        # Load a patient to generate and attach the visit. If id is passed through, do not prompt for ID.
+        if pat_id:
+            pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{pat_id}.pkl")
 
-        # Load a patient to generate and attach the request
-        pat = classes.person.Patient.load_self()
+        else:
+            print("Please select a patient to create a visit request.")
+            pat = classes.person.Patient.load_self()
 
         if not pat:
             return 0
 
-        obj = pat.generate_visit()
+        obj = cls(pat.id)
 
         attr_list = [
             {
@@ -305,14 +325,17 @@ class Visit:
             print("Record not created.")
             return 0
 
-        pat.write_self()
-        obj.write_self()
-        return obj
+        # Save each item if successful
+        if obj.write_self():
+            pat.visits.append(obj._id)
+            pat.write_self()
+
+        return 1
 
     def refresh_self(self):
         """Refreshes an existing object from file in the in case users need to backout changes. Returns the object"""
         print("Reverting changes...")
-        in_out.load_obj(self, f"./data/{self.__class__.__name__}/{self.id}.pkl")
+        in_out.load_obj(type(self), f"./data/{self.__class__.__name__}/{self.id}.pkl")
 
     @classmethod
     def load_self(cls):
@@ -352,7 +375,7 @@ class Visit:
         else:
             attr_list = [
                 {
-                    "term": "Cancel Reason: ",
+                    "term": "Cancel Reason",
                     "attr": "cancel_reason",
                     "cat_list": self._c_cancel_reason
                 }
@@ -360,9 +383,10 @@ class Visit:
 
             # Update all attributes from above. Quit if user quits during any attribute
             if not validate.get_info(self, attr_list):
+                self.refresh_self()
                 return 0
 
-            prompt = "Are you sure you want to cancel this request? You will be unable to schedule this request."
+            prompt = "Are you sure you want to cancel this request? You will be unable to schedule this request. "
             if not validate.yes_or_no(prompt):
                 self.refresh_self()
                 return 0
@@ -370,7 +394,14 @@ class Visit:
             self.status = 0
 
             # Remove visit from patient's list
-            patient = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}")
+            patient = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}.pkl")
+
+            # If any linked patients fail to load, refresh and cancel action.
+            if not patient:
+                print("Unable to load linked patient.")
+                self.refresh_self()
+                return 0
+
             patient.visits.remove(self.id)
             patient.write_self()
             self.write_self()
@@ -382,7 +413,7 @@ class Visit:
     @classmethod
     def evaluate_requests(cls):
         """Evaluates all Visits and marks them as no shows if they are past their expected date"""
-        for instance in cls.tracked_instances:
+        for instance in cls._tracked_instances:
             try:
                 with open(f"./data/{cls.__qualname__}/{instance['id']}", "rb") as read_file:
                     request = pickle.load(read_file)

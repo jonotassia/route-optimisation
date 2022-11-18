@@ -1,9 +1,12 @@
 # This file contains classes to be used in the route optimisation tool.
 import itertools
+
+import navigation
 import validate
 import in_out
 import classes
 from datetime import time
+from time import sleep
 
 # TODO: Determine best way to generate Visits that are not tied to a date, but relative to days of week
 
@@ -37,7 +40,7 @@ class Human:
     def status(self, value):
         """Checks values of sex before assigning"""
         try:
-            if value == 1 or 0:
+            if value == 1 or value == 0:
                 self._status = value
 
             else:
@@ -49,7 +52,7 @@ class Human:
     @property
     def name(self):
         try:
-            name = self._name[0], ",", self._name[1], self._name[2]
+            name = f"{self._name[0]}, {self._name[1]} {self._name[2] if self._name[2] else None}"
             return name
 
         except IndexError:
@@ -124,22 +127,23 @@ class Human:
 
     @property
     def team_id(self):
-
-        return self._team_name
+        return self._team_id
 
     @team_id.setter
     def team_id(self, value):
-        """Checks that team id is in instance list before assigning"""
-        if value in classes.team.Team._tracked_instances.keys():
-            self._team_id = value
-
-        else:
-            raise ValueError(f"Invalid selection. Team does not exist.")
+        """
+        ID of linked team.
+        """
+        self._team_id = value
 
     @property
     def team_name(self):
-        self._team_name = classes.team.Team._tracked_instances[self._team_id]["name"]
-        return self._team_name
+        if self.team_id:
+            self._team_name = classes.team.Team._tracked_instances[self.team_id]["name"]
+            return self._team_name
+
+        else:
+            return None
 
     @classmethod
     def create_self(cls):
@@ -195,13 +199,14 @@ class Human:
         return obj
 
     def write_self(self):
-        """Writes the object to file as a JSON using the pickle module"""
-        in_out.write_obj(self)
+        """Writes the object to file as a .pkl using the pickle module"""
+        if in_out.write_obj(self):
+            return 1
 
     def refresh_self(self):
-        """Refreshes an existing object from file in the in case users need to backout changes. Returns the object"""
+        """Refreshes an existing object from file in the in case users need to backout changes."""
         print("Reverting changes...")
-        in_out.load_obj(self, f"./data/{self.__class__.__name__}/{self.id}.pkl")
+        in_out.load_obj(type(self), f"./data/{self.__class__.__name__}/{self.id}.pkl")
 
     @classmethod
     def load_self(cls):
@@ -289,47 +294,96 @@ class Patient(Human):
         """
         Groups all update methods for user selection. This will be called when modifying record in navigation.py
         """
-
+        navigation.clear()
         while True:
-            print(f"ID: {self.id}".ljust(10), f"Name: {self.name}\n".rjust(10))
+            print(f"ID: {self.id}\n",
+                  f"Name: {self.name}\n")
 
-            selection = validate.qu_input("What would you like to do:"
-                                          "     1. View or Modify Pending/Scheduled Visits"
-                                          "     2. Create Visit"
-                                          "     3. Modify Address"
-                                          "     4. Modify Visit Skills/Preferences"
-                                          "     5. Assign Team"
-                                          "     6. Inactivate Record"
+            selection = validate.qu_input("What would you like to do:\n"
+                                          "     1. View or Modify Pending/Scheduled Visits\n"
+                                          "     2. Create Visit\n"
+                                          "     3. Modify Address\n"
+                                          "     4. Modify Visit Skills/Preferences\n"
+                                          "     5. Assign Team\n"
+                                          "     6. Inactivate Record\n"
+                                          "\n"
+                                          "Selection: "
                                           )
 
             if not selection:
                 return 0
 
-            elif selection == 1:
+            elif selection == "1":
                 self.get_requests()
 
             # Generate a new visit
-            elif selection == 2:
-                self.generate_visit()
+            elif selection == "2":
+                classes.visits.Visit.create_self(pat_id=self.id)
 
             # Update address
-            elif selection == 3:
+            elif selection == "3":
                 self.update_address()
 
             # Update preferences, including skill requirements, gender, and times
-            elif selection == 4:
+            elif selection == "4":
                 self.update_skill_pref()
 
             # Assign responsible team to patient
-            elif selection == 5:
+            elif selection == "5":
                 self.assign_team()
 
             # Inactivate patient
-            elif selection == 6:
+            elif selection == "6":
                 self.inactivate_self()
+                return 0
 
             else:
                 print("Invalid selection.")
+
+    def get_requests(self):
+        """
+        Networks to visits in the self._visits list and displays key information, including:
+            scheduling_status
+            date
+            time
+            address
+        Sorts visits in order of expected date and time.
+        :return: 1 if successful
+        """
+        # TODO: Update so it only outputs a specific day
+        if not self.visits:
+            print("This patient does not have any linked visits.")
+            sleep(1.5)
+            return 0
+
+        # Display list of requests linked to patient.
+        for count, visit_id in enumerate(self.visits):
+            visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
+
+            print(f"{count + 1}) Visit ID: {visit.id}"
+                  f"    Scheduling Status: {visit.sched_status.capitalize()}"
+                  f"    Expected Date: {visit.exp_date}"
+                  f"    Visit Start Window: {visit.time_earliest}"
+                  f"    Visit End Window: {visit.time_latest}")
+
+        # Validate that user input ID of a linked visit, then open visit for modification.
+        while True:
+            selection = validate.qu_input("Which visit would you like to modify? ")
+
+            if not selection:
+                return 0
+
+            # Raise error if not in list
+            visit_id = validate.valid_cat_list(selection, self.visits)
+
+            if isinstance(visit_id, Exception):
+                print("Invalid selection.")
+                continue
+
+            visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
+            visit.update_self()
+
+            return 1
 
     def update_address(self):
         """
@@ -338,7 +392,7 @@ class Patient(Human):
         """
         attr_list = [
             {
-                "term": f"Address. Previous: {self.address if self.address else 'None'}",
+                "term": f"\nPrevious Address: {self.address if self.address else 'None'}. \nAddress",
                 "attr": "address"
             }
         ]
@@ -366,41 +420,33 @@ class Patient(Human):
         pass
 
     def assign_team(self):
-        """Assigns the patient to a team so that they can be considered in that team's route calculation"""
-        pass
-
-    def generate_visit(self):
-        """This method initializes and returns a request (class = Visit) for scheduling, which is written to file"""
-        # TODO: Determine how to incorporate the concept of skills
-
-        new_visit = classes.visits.Visit(self.id)
-        self.visits.append(new_visit.id)
-
-        return new_visit
-
-    def get_requests(self):
         """
-        Networks to visits in the self._visits list and displays key information, including:
-            scheduling_status
-            date
-            time
-            address
-        Sorts visits in order of expected date and time.
-        :return: 1 if successful
+        Assigns the patient to a team so that they can be considered in that team's route calculation
         """
-        for visit_id in self._visits:
-            visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
-            print(f"Visit ID: {visit.id}"
-                  f"    Scheduling Status: {visit.sched_status}"
-                  f"    Expected Date: {visit.exp_date}"
-                  f"    Visit Start Window: {visit.time_earliest}"
-                  f"    Visit End Window: {visit.time_latest}")
+        # Allow user to select team either by name or id, then load to an object
+        print(f"Select a team to add to this patient. Current: {self.team_name if self.team_name else 'None'}")
+        team = in_out.get_obj(classes.team.Team)
 
-        while True:
-            selection = validate.qu_input("Which visit would you like to modify? ")
+        if not team:
+            return 0
 
-            if validate.valid_cat_list(selection, self._visits):
-                visit.update_self()
+        # Add team to patient and add patient to team
+        self.team_id = team.id
+        team._pat_id.append(self.id)
+
+        detail_dict = {
+            "Team ID": self.team_id,
+            "Team Name": self.team_name
+        }
+
+        # If user does not confirm info, changes will be reverted.
+        if not validate.confirm_info(self, detail_dict):
+            self.refresh_self()
+            return 0
+
+        team.write_self()
+        self.write_self()
+        return 1
 
     def inactivate_self(self):
         """
@@ -465,6 +511,12 @@ class Patient(Human):
                 for visit_id in self.visits:
                     visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}")
 
+                    # If any linked visits fail to load, refresh and cancel action.
+                    if not visit:
+                        print("Unable to load linked visits.")
+                        self.refresh_self()
+                        return 0
+
                     visit.status = 0
                     visit.cancel_reason = visit._c_cancel_reason[4]
 
@@ -475,6 +527,13 @@ class Patient(Human):
             # Remove from team
             if self.team_id:
                 team = in_out.load_obj(classes.team.Team, f"./data/Team/{self.team_id}")
+
+                # If linked team fails to load, refresh and cancel action.
+                if not team:
+                    print("Unable to load linked team.")
+                    self.refresh_self()
+                    return 0
+
                 team.pat_id.remove(self.id)
                 team.write_self()
 
@@ -589,53 +648,51 @@ class Clinician(Human):
         else:
             raise ValueError("Please enter a valid time in the format HHMM.\n")
 
-    def assign_team(self):
-        """Assigns the clinician to a team so that they can be considered in that team's route calculation"""
-
-        pass
-
     def update_self(self):
         """
         Groups all update methods for user selection. This will be called when modifying record in navigation.py
         """
+        navigation.clear()
         while True:
             print(f"ID: {self.id}".ljust(10), f"Name: {self.name}\n".rjust(10))
 
-            selection = validate.qu_input("What would you like to do:"
-                                          "     1. View/Modify Scheduled Visit"
-                                          "     2. Update Start/End Times and Addresses"
-                                          "     3. Modify Personal Address"
-                                          "     4. Modify Skills"
-                                          "     5. Assign Team"
-                                          "     6. Inactivate Record"
-                                          )
+            selection = validate.qu_input("What would you like to do:\n"
+                                          "     1. View/Modify Scheduled Visit\n"
+                                          "     2. Update Start/End Times and Addresses\n"
+                                          "     3. Modify Personal Address\n"
+                                          "     4. Modify Skills\n"
+                                          "     5. Assign Team\n"
+                                          "     6. Inactivate Record\n"
+                                          "\n"
+                                          "Selection: ")
 
             if not selection:
                 return 0
 
             # View/modify scheduled visits
-            elif selection == 1:
+            elif selection == "1":
                 self.scheduled_visits()
 
             # Update start/end time and address
-            elif selection == 2:
+            elif selection == "2":
                 self.update_start_end()
 
             # Update address
-            elif selection == 3:
+            elif selection == "3":
                 self.update_address()
 
             # Modify clinical skills
-            elif selection == 4:
+            elif selection == "4":
                 self.modify_skills()
 
             # Assign team
-            elif selection == 5:
+            elif selection == "5":
                 self.assign_team()
 
             # Inactivate record
-            elif selection == 6:
+            elif selection == "6":
                 self.inactivate_self()
+                return 0
 
             else:
                 print("Invalid selection.")
@@ -729,6 +786,36 @@ class Clinician(Human):
         """
         pass
 
+    def assign_team(self):
+        """
+        Assigns the clinician to a team so that they can be considered in that team's route calculation
+        """
+        # Allow user to select team either by name or id, then load to an object
+        print(f"Select a team to add to this patient. Current: {self.team_name if self.team_name else 'None'}")
+
+        team = in_out.get_obj(classes.team.Team)
+
+        if not team:
+            return 0
+
+        # Add team to patient and add patient to team
+        self.team_id = team.id
+        team._clin_id.append(self.id)
+
+        detail_dict = {
+            "Team ID": self.team_id,
+            "Team Name": self.team_name
+        }
+
+        # If user does not confirm info, changes will be reverted.
+        if not validate.confirm_info(self, detail_dict):
+            self.refresh_self()
+            return 0
+
+        team.write_self()
+        self.write_self()
+        return 1
+
     def optimize_clinician_trip(self):
         """Calculates the estimated trip route for the clinician. Allows for overrides of start/end constraints"""
         pass
@@ -738,7 +825,6 @@ class Clinician(Human):
         This method sets the status of a clinician to inactive.
         Prompts the user for an inactive reason from c_inactive_reason and files back to self.inactive_reason.
         """
-
         # Checks if request is already inactive.
         if self.status == 0:
             print("This record is already inactive.")
@@ -763,6 +849,13 @@ class Clinician(Human):
 
                 # Remove from team
                 team = in_out.load_obj(classes.team.Team, f"./data/Team/{self._team_id}")
+
+                # If any linked clinicians fail to load, refresh and cancel action.
+                if not team:
+                    print("Unable to load linked teams.")
+                    self.refresh_self()
+                    return 0
+
                 team.clin_id.remove(self.id)
                 team.write_self()
 

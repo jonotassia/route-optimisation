@@ -26,6 +26,8 @@ def write_obj(obj):
 
     print(f"{obj.__class__.__name__} successfully saved.\n")
 
+    return 1
+
 
 def get_obj(cls):
     """
@@ -34,50 +36,52 @@ def get_obj(cls):
     """
 
     while True:
-        obj_id = 0
-        obj = validate.qu_input("Name or ID: ")
+        search_obj = validate.qu_input("Name or ID: ")
 
         # Quit if q or blank is entered
-        if not obj:
+        if not search_obj:
             return 0
 
         # Prompt and flag for including inactive records
         inc_inac = True if validate.yes_or_no("Include inactive? ") else False
 
         # If not an id, search for instance in self.tracked_instances
-        if obj.isnumeric():
-            obj_id = obj
+        if search_obj.isnumeric():
+            obj_id = search_obj
             break
 
-        elif obj.isalpha():
-            obj_id = validate.validate_obj_by_name(cls, obj, inc_inac=inc_inac)
-            break
+        obj_id = validate.validate_obj_by_name(cls, search_obj, inc_inac=inc_inac)
 
-        else:
-            print("Invalid response.")
-            continue
+        if obj_id:
+            break
 
     # Generate and return object of class that is passed as argument
     if obj_id:
         file = f"./data/{cls.__qualname__}/{obj_id}.pkl"
-        return load_obj(cls, file)
+        return load_obj(cls, file, inc_inac=inc_inac)
 
     else:
         print("Record not found.")
         return 0
 
 
-def load_obj(cls, file_path):
+def load_obj(cls, file_path, inc_inac=0):
     """Loads an object from file. Leveraged by class methods when loading an object from file."""
+    # TODO: Determine why this is still pulling in inactive records when flag set
     try:
         with open(file_path, "rb") as file:
             obj = pickle.load(file)
 
-        print(f"{cls.__qualname__} successfully loaded.")
+        # If set to only show active and record is inactive, return that this record is inactive.
+        if inc_inac and obj.status == 0:
+            print("Record has been deactivated.")
+            return 0
+
+        # print(f"{cls.__qualname__} successfully loaded.")
         return obj
 
     except FileNotFoundError:
-        print(f"{cls.__qualname__} could not be found.")
+        print(f"\n{cls.__qualname__} could not be found.")
 
 
 def load_tracked_obj(cls):
@@ -87,21 +91,25 @@ def load_tracked_obj(cls):
     obj = None
     try:
         file_path = pathlib.Path(f"./data/{cls.__qualname__}/").glob("*.pkl")
+        # Quit if there are no files in that masterfile
         for file in file_path:
+            if not file:
+                return 0
+
             obj = load_obj(cls, file)
 
-        # Update tracked instance dictionary with new value (overwrites old values).
-        if isinstance(obj, classes.person.Human):
-            cls._tracked_instances[obj.id] = {"status": obj._status,
-                                              "name": obj._name,
-                                              "dob": obj._dob,
-                                              "sex": obj._sex}
+            # Update tracked instance dictionary with new value (overwrites old values).
+            if isinstance(obj, classes.person.Human):
+                cls._tracked_instances[obj.id] = {"status": obj._status,
+                                                  "name": obj._name,
+                                                  "dob": obj._dob,
+                                                  "sex": obj._sex}
 
-        else:
-            cls._tracked_instances[obj.id] = {"status": obj._status,
-                                              "name": obj._name}
+            else:
+                cls._tracked_instances[obj.id] = {"status": obj._status,
+                                                  "name": obj._name}
 
-        next(cls._id_iter)
+            next(cls._id_iter)
 
     except FileNotFoundError:
         print(f"{cls.__qualname__} could not be found.")

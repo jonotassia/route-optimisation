@@ -3,6 +3,9 @@ from datetime import datetime
 from Levenshtein import ratio as levratio
 import re
 
+import classes.person
+import navigation
+
 
 def qu_input(prompt):
     value = input(prompt)
@@ -25,10 +28,10 @@ def yes_or_no(prompt):
         if confirm.isnumeric():
             print('Please enter "yes" or "no".')
 
-        elif confirm.lower() == ("n" or "no"):
+        elif confirm.lower() == "n" or confirm.lower() == "no":
             return 0
 
-        elif confirm.lower() == ("y" or "yes"):
+        elif confirm.lower() == "y" or confirm.lower() == "yes":
             return 1
 
 
@@ -92,7 +95,7 @@ def print_cat_value(cat_list, prompt):
     # Display category values and prompt user for selection
     print(prompt)
     for x, cat in enumerate(cat_list):
-        print(f"    {x+1}. {cat.capitalize()}")
+        print(f"    {x + 1}. {cat.capitalize()}")
 
 
 def valid_cat_list(value, cat_list):
@@ -101,11 +104,13 @@ def valid_cat_list(value, cat_list):
     :return: Value from cat list.
     """
     # Return corresponding index value if entered as alphanum
-    if value in cat_list:
+    str_cat_list = [str(cat) for cat in cat_list]
+
+    if value in str_cat_list:
         return value
 
     # Return index value if entered as numeric and is an index in the category list
-    elif str(value).isnumeric() and int(value) - 1 in range(len(cat_list)):
+    elif str(value).isnumeric() and int(value) - 1 < len(cat_list):
         return cat_list[int(value) - 1]
 
     else:
@@ -134,7 +139,7 @@ def get_info(obj, attr_dict_list: list):
                 pass
 
             # Prompt user with user-friendly text, then return value until
-            value = qu_input(f"{attr_dict['term']}: ")
+            value = qu_input(f"\n{attr_dict['term']}: ")
 
             if not value:
                 if yes_or_no("You have left this information blank. Would you like to quit? "):
@@ -162,7 +167,7 @@ def confirm_info(obj, detail_dict):
     :return: 1 if change is approved, else None
     """
 
-    print(f"\nA {type(obj).__name__} with the following details will be created/updated: ")
+    print(f"Please confirm the information below: ")
 
     for k, v in detail_dict.items():
         print(f"{k}: {v}")
@@ -171,55 +176,92 @@ def confirm_info(obj, detail_dict):
         return 1
 
 
-def validate_obj_by_name(cls, obj, inc_inac=0):
-    print("Please enter the index or ID of the correct match below:")
+def validate_obj_by_name(cls, name, inc_inac=0):
+    """
+    Uses levenshtein distance to determine a ratio of distance.
+    If a perfect match is found, it will return the id of the object.
+    If it is not a perfect match, adds to the match_list and displays to user to select the correct record.
+    :param cls: Class of object being searched.
+    :param name: Name that is being searched.
+    :param inc_inac: Flags the search to include inactive records.
+    :return: Object ID
+    """
+    navigation.clear()
     match_list = []
 
     for dict_id, val in cls._tracked_instances.items():
         # If flag set for hiding inactive and record is inactive, ignore
-        if not inc_inac and not val["id"] == 0:
+        if not inc_inac and not val["status"]:
             continue
 
-        # Measure similarity by levenshtein distance and prompt user to confirm details.
-        # Append ID to match list for user validation
-        elif levratio(val["name"], obj) > 0.8:
-            match_list.append([dict_id, val['name'], val['dob']])
+        # Create name strings in both formats for matching from the list in tracked instances
+        if issubclass(cls, classes.person.Human):
+            last_first_str = f"{val['name'][0]}, {val['name'][1]} {val['name'][2]}"
+            first_last_str = f"{val['name'][1]} {val['name'][2]} {val['name'][0]}"
+
+            # Measure similarity by levenshtein distance using Last, First M notation.
+            lev_last_first = levratio(last_first_str, name)
+
+            # If perfect match, return matches ID
+            if lev_last_first == 1:
+                return dict_id
+
+            # Otherwise, add to the match list if it
+            elif lev_last_first > 0.6:
+                # Append ID to match list for user validation
+                match_list.append([dict_id, val['name'], val['dob'], val['sex']])
+
+            # Measure similarity by levenshtein distance using First M Last notation.
+            lev_first_last = levratio(first_last_str, name)
+
+            if lev_first_last == 1:
+                return dict_id
+
+            elif lev_first_last > 0.6:
+                match_list.append([dict_id, val['name'], val['dob'], val['sex']])
+
+        # For non-person objects: Measure similarity by levenshtein distance.
+        else:
+            lev_rat = levratio(val["name"], name)
+
+            if lev_rat == 1:
+                return dict_id
+
+            elif lev_rat > 0.6:
+                match_list.append([dict_id, val['name'], val['dob'], val['sex']])
 
     # Print list of potential matches for user to select from
-    if match_list:
-        for count, match in enumerate(match_list):
-            print(f"{count}) ID: {match[0]} Name: {match[1]}, DOB: {match[2]}")
-
-    else:
+    if not match_list:
         print("No records found matching those details.")
         return 0
+
+    for count, match in enumerate(match_list):
+        print(f"{count + 1}) ID: {match[0]}, "
+              f"Name: {match[1][0]}, {match[1][1]} {match[1][2]}, "
+              f"DOB: {match[2].strftime('%d/%m/%Y')}"
+              f"Sex: {match[3]}"
+              )
 
     # Prompt user to select option from above
     while True:
         try:
-            selection = qu_input("Select an index number or enter an ID from above: ")
+            selection = qu_input("\nSelect an index number from above: ")
 
             # Quit if q or blank is entered
             if not selection:
                 return 0
 
+            # Convert selection to integer.
             selection = int(selection)
 
-            # Masterfile IDs begin after 10000, so if number under that range, it will select as an index
-            if selection in match_list and selection > 9999:
-                obj = selection
-                return obj
-
-            elif selection in len(match_list):
-                obj = match_list[selection]
-                return obj
+            # Check response by index in match list
+            if 0 < selection <= len(match_list):
+                obj_id = match_list[selection - 1][0]
+                return obj_id
 
             # Prompt user to break if record does not exist
             else:
-                print("Record does not exist.")
+                print("Invalid selection. Please select a record from above by index number.")
 
-                if not yes_or_no("Continue with selection? "):
-                    return 0
-
-        except TypeError:
-            print("Response must be a number.")
+        except ValueError:
+            print("Response must be the index number of the record.")
