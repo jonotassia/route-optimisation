@@ -1,6 +1,5 @@
 # This file contains classes to be used in the route optimisation tool.
 import itertools
-
 import navigation
 import validate
 import in_out
@@ -16,7 +15,7 @@ class Human:
     _tracked_instances = {}
     _c_sex_options = ("male", "female", "not specified")
 
-    def __init__(self, status=1, name="", dob="", sex="", address=""):
+    def __init__(self, status=1, name="", dob="", sex="", address="{}"):
         """Initiates a human objects with the following attributes:
         id, first name, last name, middle name, date of birth, sex, and address."""
         self._id = next(self._id_iter)
@@ -112,7 +111,15 @@ class Human:
 
     @property
     def address(self):
-        return self._address
+        """
+        Displays an address parsed using USAddress. Loops through values in dictionary to output human-readable address.
+        :return: Human-readable address
+        """
+        disp_address = ""
+        for add_comp in self._address.values():
+            disp_address += add_comp
+
+        return disp_address
 
     @address.setter
     def address(self, value):

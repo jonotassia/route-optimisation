@@ -2,10 +2,11 @@
 from datetime import datetime
 from Levenshtein import ratio as levratio
 import re
-
+import usaddress
 import classes.person
 import navigation
-
+import boto3
+from placekey.api import PlacekeyAPI
 
 def qu_input(prompt):
     value = input(prompt)
@@ -64,10 +65,30 @@ def valid_name(value):
 def valid_address(value):
     """Uses Place Key api to ensure address is valid: https://www.placekey.io/blog/getting-started-with-placekey-io
         Returns address dictionary with keys for street, building/apt number, city, state, country, and post code."""
-    # TODO: Implement Placekey API to validate address
-    address = value
+    # Initiate AWS SSM integration for secrets storage
+    ssm = boto3.client('ssm')
 
-    if address:
+    # Grab api key from AWS
+    placekey_api_key = ssm.get_parameter(Name="placekey_api_key")
+    pk_api = PlacekeyAPI(placekey_api_key)
+
+    # Parse address text from user
+    try:
+        address = usaddress.tag(value)
+
+    except usaddress.RepeatedLabelError as err:
+        return err
+
+    # Verify address is real using Placekey API. If real, return address.
+    address_query = {
+        "street_address": address["AddressNumber"] + address["StreetNamePreDirectional"] + address["StreetName"] + address["StreetNamePostType"],
+        "city": address["PlaceName"],
+        "region": address["StateName"],
+        "postal_code": address["ZipCode"],
+        "iso_country_code": "US",
+    }
+
+    if pk_api.lookup_placekey(address_query):
         return address
 
     else:
