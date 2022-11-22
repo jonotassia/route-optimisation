@@ -7,6 +7,7 @@ import classes
 from datetime import time
 from time import sleep
 
+
 # TODO: Determine best way to generate Visits that are not tied to a date, but relative to days of week
 
 
@@ -115,9 +116,13 @@ class Human:
         Displays an address parsed using USAddress. Loops through values in dictionary to output human-readable address.
         :return: Human-readable address
         """
-        disp_address = ""
-        for add_comp in self._address.values():
-            disp_address += add_comp
+        # TODO: Add building name so it appears conditionally
+        disp_address = f'{self._address[0]["AddressNumber"]} {self._address[0]["StreetNamePreDirectional"]} ' \
+                       f'{self._address[0]["StreetName"]} {self._address[0]["StreetNamePostType"]}, ' \
+                       f'{self._address[0]["PlaceName"]}, ' \
+                       f'{self._address[0]["StateName"]}, ' \
+                       f'{self._address[0]["ZipCode"]}, ' \
+                       f'US'
 
         return disp_address
 
@@ -130,7 +135,7 @@ class Human:
             self._address = address
 
         else:
-            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+            raise ValueError("Please enter a complete and valid address.\n")
 
     @property
     def team_id(self):
@@ -873,5 +878,3 @@ class Clinician(Human):
                 print("Record successfully inactivated.")
 
                 return 1
-
-

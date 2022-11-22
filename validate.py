@@ -69,8 +69,8 @@ def valid_address(value):
     ssm = boto3.client('ssm')
 
     # Grab api key from AWS
-    placekey_api_key = ssm.get_parameter(Name="placekey_api_key")
-    pk_api = PlacekeyAPI(placekey_api_key)
+    placekey_api_key = ssm.get_parameter(Name="placekey_api_key", WithDecryption=True)
+    pk_api = PlacekeyAPI(placekey_api_key['Parameter']['Value'])
 
     # Parse address text from user
     try:
@@ -80,15 +80,19 @@ def valid_address(value):
         return err
 
     # Verify address is real using Placekey API. If real, return address.
-    address_query = {
-        "street_address": address["AddressNumber"] + address["StreetNamePreDirectional"] + address["StreetName"] + address["StreetNamePostType"],
-        "city": address["PlaceName"],
-        "region": address["StateName"],
-        "postal_code": address["ZipCode"],
-        "iso_country_code": "US",
-    }
+    try:
+        address_query = {
+            "street_address": f'{address[0]["AddressNumber"]} {address[0]["StreetNamePreDirectional"]} {address[0]["StreetName"]} {address[0]["StreetNamePostType"]}',
+            "city": address[0]["PlaceName"],
+            "region": address[0]["StateName"],
+            "postal_code": address[0]["ZipCode"],
+            "iso_country_code": "US"
+        }
 
-    if pk_api.lookup_placekey(address_query):
+    except KeyError as err:
+        return err
+
+    if pk_api.lookup_placekey(**address_query):
         return address
 
     else:
