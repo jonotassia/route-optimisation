@@ -92,8 +92,10 @@ def valid_address(value):
     except KeyError as err:
         return err
 
-    if pk_api.lookup_placekey(**address_query):
-        return address
+    placekey = pk_api.lookup_placekey(**address_query)
+
+    if placekey:
+        return address, placekey
 
     else:
         return ValueError

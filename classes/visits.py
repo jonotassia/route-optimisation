@@ -6,12 +6,13 @@ import in_out
 import classes
 import navigation
 from datetime import datetime, date
+import placekey as pk
 
 
 class Visit:
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
     _tracked_instances = {}
-    _c_sched_status = ("unscheduled", "scheduled", "no show", "cancelled")
+    _c_sched_status = ("unassigned", "assigned", "no show", "cancelled")
     _c_cancel_reason = ("clinician unavailable", "patient unavailable", "no longer needed", "expired", "system action")
 
     def __init__(self, pat_id, status=1, sched_status="unscheduled", address="", time_earliest="", time_latest="", exp_date=""):
@@ -19,9 +20,11 @@ class Visit:
             req_id, pat_id, name, status, address, the earliest time, latest time, sched status, and cancel_reason"""
         self._id = next(self._id_iter)
         self._pat_id = pat_id
+        self._clin_id = None
         self._name = "Visit" + str(self._id)
         self._status = status
         self._address = address
+        self._placekey = None
         self._time_earliest = time_earliest
         self._time_latest = time_latest
         self._exp_date = exp_date
@@ -54,19 +57,36 @@ class Visit:
             print("Status can only be 0 or 1.")
 
     @property
-    def address(self):
-        return self._address
-
-    @address.setter
-    def address(self, value):
-        """Checks values of date of birth before assigning"""
-        address = validate.valid_address(value)
-
-        if not isinstance(address, Exception):
-            self._address = address
+    def patient_name(self):
+        if self._pat_id:
+            name = classes.person.Patient._tracked_instances[self._pat_id]["name"]
+            return f"{name[0]}, {name[1]} {name[2] if name[2] else None}"
 
         else:
-            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+            return None
+
+    @property
+    def clinician_name(self):
+        if self._clin_id:
+            name = classes.person.Clinician._tracked_instances[self._clin_id]["name"]
+            return f"{name[0]}, {name[1]} {name[2] if name[2] else None}"
+
+        else:
+            return None
+
+    @property
+    def address(self):
+        """
+        Address pulled from linked patient.
+        :return: Human-readable address
+        """
+        # TODO: Add building name so it appears conditionally
+        pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}.pkl")
+        return pat.address
+
+    @property
+    def coord(self):
+        return pk.placekey_to_geo(self._placekey)
 
     @property
     def time_earliest(self):
@@ -164,7 +184,7 @@ class Visit:
         while True:
             selection = validate.qu_input("What would you like to do:\n"
                                           "     1. Modify Visit Date and Time\n"
-                                          "     2. Modify Visit Address\n"
+                                          "     2. Assign Visit\n"
                                           "     3. Inactivate Record\n"
                                           "\n"
                                           "Selection: ")
@@ -176,9 +196,8 @@ class Visit:
             elif selection == "1":
                 self.update_date_time()
 
-            # Update request address
             elif selection == "2":
-                self.update_address()
+                self.manual_assign_visit()
 
             elif selection == "3":
                 self.inactivate_self()
@@ -214,8 +233,7 @@ class Visit:
 
         detail_dict = {
             "Expected Date": self.exp_date,
-            "Start Time Window": self.time_earliest,
-            "End Time Window": self.time_latest,
+            "Time Window": f"{self.time_earliest} - {self.time_latest}"
         }
 
         # If user does not confirm info, changes will be reverted.
@@ -227,37 +245,62 @@ class Visit:
 
         return 1
 
-    def update_address(self):
+    def manual_assign_visit(self):
         """
-        Updates address for the request.
-        :return: 1 if successful.
+        Manually assigns a visit to a clinician, in contrast to running the team optimiser algorithm.
+        This updates the status of the visit to scheduled and updates the clinician's visits list.
+        This will not be available if the visit is inactive or scheduled.
+        :return: 1 if successful
         """
-        attr_list = [
-            {
-                "term": f"Address. Previous: {self.address if self.address else 'None'}",
-                "attr": "address"
-            }
-        ]
-
-        # Update all attributes from above. Quit if user quits during any attribute
-        if not validate.get_info(self, attr_list):
-            self.refresh_self()
+        # Check if visit is inactive. If so, quit.
+        if self.status == 0:
+            print("This visit is inactive.")
             return 0
 
+        # Check if visit is assigned already. If so, prompt user about re-assigning.
+        elif self.sched_status == self._c_sched_status[1]:
+            print("This visit is already assigned. See the details below:\n")
+            # Display visit details to user
+            self.show_visit_details()
+
+            selection = validate.yes_or_no('Are you sure you want to continue reassigning this visit?')
+
+            if not selection:
+                return 0
+
+        # If neither of the above conditions are true, allow user to reassign visit by selecting a clinician.
+        print("Please select a clinician to assign this visit.")
+        clin = classes.person.Clinician.load_self()
+
+        if not clin:
+            return 0
+
+        # Append visit ID to clinician's visit list and vice versa
+        clin._visits.append(self.id)
+        self._clin_id = clin.id
+        self._sched_status = self._c_sched_status[1]
+
+        # Write changes to file, or back out if fails to save
+        if clin.write_self():
+            self.write_self()
+            return 1
+
+    def show_visit_details(self):
+        """
+        Displays details of current visit, including patient, clinician, and status.
+        :return: 1 if successful
+        """
+        # Output linked visit details
         detail_dict = {
-            "Address": self.address
+            "Patient": self.patient_name,
+            "Clinician": self.clinician_name,
+            "Visit Address": self.address,
+            "Expected Date": self.exp_date,
+            "Time Window": f"{self.time_earliest} - {self.time_latest}"
         }
 
-        # If user does not confirm info, changes will be reverted.
-        if not validate.confirm_info(self, detail_dict):
-            self.refresh_self()
-            return 0
-
-        self.write_self()
-        return 1
-
-    def schedule_visit(self):
-        pass
+        for k, v in detail_dict.items():
+            print(f"{k}: {v}")
 
     def write_self(self):
         """Writes the object to file as a .pkl using the pickle module"""
@@ -291,10 +334,6 @@ class Visit:
 
         attr_list = [
             {
-                "term": "Address",
-                "attr": "address"
-            },
-            {
                 "term": "Expected Date",
                 "attr": "exp_date"
             },
@@ -313,11 +352,11 @@ class Visit:
             return 0
 
         detail_dict = {
-            "ID": obj.id,
+            "Patient": obj.patient_name,
+            "Visit ID": obj.id,
             "Visit Address": obj.address,
             "Expected Date": obj.exp_date,
-            "Window Start Time": obj.time_earliest,
-            "Window End Time": obj.time_latest
+            "Time Window": f"{obj.time_earliest} - {obj.time_latest}"
         }
 
         # If user confirms information is correct, a new object is created, written, and added to _tracked_instances
@@ -396,7 +435,7 @@ class Visit:
             # Remove visit from patient's list
             patient = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}.pkl")
 
-            # If any linked patients fail to load, refresh and cancel action.
+            # If any linked patient fails to load, refresh and cancel action.
             if not patient:
                 print("Unable to load linked patient.")
                 self.refresh_self()
@@ -404,8 +443,21 @@ class Visit:
 
             patient.visits.remove(self.id)
             patient.write_self()
-            self.write_self()
 
+            # Remove visit from assigned clinician
+            clin = in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{self._clin_id}.pkl")
+
+            # If linked clinician fails to load, refresh and cancel action.
+            if not clin:
+                print("Unable to load linked clinician.")
+                self.refresh_self()
+                return 0
+
+            clin.visits.remove(self.id)
+            clin.write_self()
+
+            # Cancel visit
+            self.write_self()
             print("Visit successfully cancelled.")
 
             return 1

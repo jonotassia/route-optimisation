@@ -6,6 +6,7 @@ import in_out
 import classes
 from datetime import time
 from time import sleep
+import placekey as pk
 
 
 # TODO: Determine best way to generate Visits that are not tied to a date, but relative to days of week
@@ -19,6 +20,7 @@ class Human:
     def __init__(self, status=1, name="", dob="", sex="", address="{}"):
         """Initiates a human objects with the following attributes:
         id, first name, last name, middle name, date of birth, sex, and address."""
+        self._placekey = None
         self._id = next(self._id_iter)
         self._status = status
         self._name = name
@@ -128,14 +130,19 @@ class Human:
 
     @address.setter
     def address(self, value):
-        """Checks values of date of birth before assigning"""
-        address = validate.valid_address(value)
+        """Checks values of address before assigning"""
+        address, placekey = validate.valid_address(value)
 
         if not isinstance(address, Exception):
             self._address = address
+            self._placekey = placekey
 
         else:
             raise ValueError("Please enter a complete and valid address.\n")
+
+    @property
+    def coord(self):
+        return pk.placekey_to_geo(self._placekey)
 
     @property
     def team_id(self):
@@ -151,8 +158,7 @@ class Human:
     @property
     def team_name(self):
         if self.team_id:
-            self._team_name = classes.team.Team._tracked_instances[self.team_id]["name"]
-            return self._team_name
+            return classes.team.Team._tracked_instances[self.team_id]["name"]
 
         else:
             return None
@@ -579,7 +585,9 @@ class Clinician(Human):
 
         self._id = next(self._id_iter)
         self._start_address = address
+        self._start_placekey = None
         self._end_address = address
+        self._end_placekey = None
         self._start_time = time(9)
         self._end_time = time(17)
         self._visits = []
@@ -602,33 +610,67 @@ class Clinician(Human):
 
     @property
     def start_address(self):
-        return self._start_address
+        """
+        Displays an address parsed using USAddress. Loops through values in dictionary to output human-readable address.
+        :return: Human-readable address
+        """
+        # TODO: Add building name so it appears conditionally
+        disp_address = f'{self._start_address[0]["AddressNumber"]} {self._start_address[0]["StreetNamePreDirectional"]} ' \
+                       f'{self._start_address[0]["StreetName"]} {self._start_address[0]["StreetNamePostType"]}, ' \
+                       f'{self._start_address[0]["PlaceName"]}, ' \
+                       f'{self._start_address[0]["StateName"]}, ' \
+                       f'{self._start_address[0]["ZipCode"]}, ' \
+                       f'US'
+
+        return disp_address
 
     @start_address.setter
     def start_address(self, value):
-        """Checks values of date of birth before assigning"""
-        address = validate.valid_address(value)
+        """Checks values of address before assigning"""
+        address, placekey = validate.valid_address(value)
 
-        if address:
+        if not isinstance(address, Exception):
             self._start_address = address
+            self._start_placekey = placekey
 
         else:
-            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+            raise ValueError("Please enter a complete and valid address.\n")
+
+    @property
+    def start_coord(self):
+        return pk.placekey_to_geo(self._start_placekey)
 
     @property
     def end_address(self):
-        return self._end_address
+        """
+        Displays an address parsed using USAddress. Loops through values in dictionary to output human-readable address.
+        :return: Human-readable address
+        """
+        # TODO: Add building name so it appears conditionally
+        disp_address = f'{self._end_address[0]["AddressNumber"]} {self._end_address[0]["StreetNamePreDirectional"]} ' \
+                       f'{self._end_address[0]["StreetName"]} {self._end_address[0]["StreetNamePostType"]}, ' \
+                       f'{self._end_address[0]["PlaceName"]}, ' \
+                       f'{self._end_address[0]["StateName"]}, ' \
+                       f'{self._end_address[0]["ZipCode"]}, ' \
+                       f'US'
+
+        return disp_address
 
     @end_address.setter
     def end_address(self, value):
-        """Checks values of date of birth before assigning"""
-        address = validate.valid_address(value)
+        """Checks values of address before assigning"""
+        address, placekey = validate.valid_address(value)
 
-        if address:
+        if not isinstance(address, Exception):
             self._end_address = address
+            self._end_placekey = placekey
 
         else:
-            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+            raise ValueError("Please enter a complete and valid address.\n")
+
+    @property
+    def end_coord(self):
+        return pk.placekey_to_geo(self._end_placekey)
 
     @property
     def start_time(self):
