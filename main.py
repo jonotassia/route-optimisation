@@ -11,12 +11,13 @@ from classes.team import Team
 Primary stream - sequence of events:
 - Generate list of Clinician
 - Generate list of Patient
-- Generate list of Visits each day (networked to a patient via ID)
+- Generate list of Visits each day (networked to a patient and clinician via ID)
+- Generate list of Team each day (networked to a patient and clinician via ID)
 - Calculate real distances between Clinician and Visits
 - Evaluate all permutations of routes and select optimal route
 
 Secondary actions available:
-- Update user, patient, or request details
+- Update user, patient, visit, or team details
 - Cancel Visit
 - Audit logging
 """

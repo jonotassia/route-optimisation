@@ -12,6 +12,7 @@ import placekey as pk
 class Visit:
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
     _tracked_instances = {}
+    _instance_by_date = {}
     _c_sched_status = ("unassigned", "assigned", "no show", "cancelled")
     _c_cancel_reason = ("clinician unavailable", "patient unavailable", "no longer needed", "expired", "system action")
 
@@ -23,8 +24,6 @@ class Visit:
         self._clin_id = None
         self._name = "Visit" + str(self._id)
         self._status = status
-        self._address = address
-        self._placekey = None
         self._time_earliest = time_earliest
         self._time_latest = time_latest
         self._exp_date = exp_date
@@ -85,8 +84,14 @@ class Visit:
         return pat.address
 
     @property
+    def placekey(self):
+        pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}.pkl")
+        return pat.placekey
+
+    @property
     def coord(self):
-        return pk.placekey_to_geo(self._placekey)
+        pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}.pkl")
+        return pat.coord
 
     @property
     def time_earliest(self):
@@ -231,6 +236,9 @@ class Visit:
             self.refresh_self()
             return 0
 
+        # Save old date for searching and updating instances_by_date index
+        old_date = self._exp_date
+
         detail_dict = {
             "Expected Date": self.exp_date,
             "Time Window": f"{self.time_earliest} - {self.time_latest}"
@@ -241,6 +249,10 @@ class Visit:
             self.refresh_self()
             return 0
 
+        # Remove visit from instances_by_date index
+        self._instance_by_date[old_date].remove(self.id)
+
+        # Save and update instance lists
         self.write_self()
 
         return 1
@@ -284,6 +296,9 @@ class Visit:
         if clin.write_self():
             self.write_self()
             return 1
+
+        else:
+            self.refresh_self()
 
     def show_visit_details(self):
         """

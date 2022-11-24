@@ -13,12 +13,23 @@ def write_obj(obj):
     with open(f"./data/{obj.__class__.__name__}/{obj.id}.pkl", "wb") as file:
         pickle.dump(obj, file)
 
-    # Update tracked instance dictionary with new value (overwrites old values). Varies type of object.
+    # Update tracked instance dictionary with new value (overwrites old values).
     if isinstance(obj, classes.person.Human):
         obj._tracked_instances[obj.id] = {"status": obj._status,
                                           "name": obj._name,
                                           "dob": obj._dob,
                                           "sex": obj._sex}
+
+    elif isinstance(obj, classes.visits.Visit):
+        obj._tracked_instances[obj.id] = {"status": obj._status,
+                                          "date": obj._exp_date}
+
+        # Create or add to the search by date list for visits
+        try:
+            obj._instance_by_date[obj.exp_date].append(obj.id)
+
+        except KeyError:
+            obj._instance_by_date[obj._exp_date] = [obj.id]
 
     else:
         obj._tracked_instances[obj.id] = {"status": obj._status,
@@ -88,7 +99,6 @@ def load_tracked_obj(cls):
     """Class method to initialise all instances of a class from file. Modifies the class attribute tracked_instances.
         This is uses to allow for quick searching by name, date of birth, and ID"""
     # TODO: Convert to a pull from a set of text files rather than reading each individual object file.
-    obj = None
     try:
         file_path = pathlib.Path(f"./data/{cls.__qualname__}/").glob("*.pkl")
         # Quit if there are no files in that masterfile
@@ -105,13 +115,22 @@ def load_tracked_obj(cls):
                                                   "dob": obj._dob,
                                                   "sex": obj._sex}
 
+            elif isinstance(obj, classes.visits.Visit):
+                cls._tracked_instances[obj.id] = {"status": obj._status,
+                                                  "date": obj._exp_date}
+
+                # Create or add to the search by date list for visits
+                try:
+                    obj._instance_by_date[obj.exp_date].append(obj.id)
+
+                except KeyError:
+                    obj._instance_by_date[obj._exp_date] = [obj.id]
+
             else:
                 cls._tracked_instances[obj.id] = {"status": obj._status,
                                                   "name": obj._name}
 
-            next(cls._id_iter)
+            # next(cls._id_iter)
 
     except FileNotFoundError:
         print(f"{cls.__qualname__} could not be found.")
-
-
