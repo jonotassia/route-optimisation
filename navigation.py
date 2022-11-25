@@ -1,6 +1,8 @@
 # This file contains functions to be used in the creating the GUI.
 # Stick with TUI for now, but launch completed map into web-browser or GUI
 import validate
+import display_map
+import geolocation
 import os
 
 
@@ -126,6 +128,36 @@ def create_object_director(cls):
         obj = cls.create_self()
         return obj
 
+
 def geo_feat():
-    clear()
-    pass
+    """
+    Menu for users to select geolocation features
+    :return: 0 if no selection
+    """
+    while True:
+        clear()
+
+        print("Please select an option from the list below:\n"
+              "    1) Clinician Optimizer\n"
+              "    2) Team Optimizer\n")
+
+        try:
+
+            selection = validate.qu_input("Selection: ")
+
+            if not selection:
+                return 0
+
+            elif selection == "1":
+                geolocation.optimize_trip()
+                continue
+
+            elif selection == "2":
+                geolocation.optimize_team()
+                continue
+
+            else:
+                print("Invalid selection.")
+
+        except TypeError:
+            print("Please select an option by number from the list above.\n")

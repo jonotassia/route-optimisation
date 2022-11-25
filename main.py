@@ -28,6 +28,7 @@ Secondary actions available:
 # TODO: Determine how to deploy to a server
 
 if __name__ == "__main__":
+    # Initialize a list of all classes and loop to populate instance tracking lists
     _class_list = (Patient, Clinician, Visit, Team)
 
     for cls in _class_list:

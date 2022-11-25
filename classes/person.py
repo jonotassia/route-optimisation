@@ -360,7 +360,7 @@ class Patient(Human):
 
     def get_requests(self):
         """
-        Networks to visits in the self._visits list and displays key information, including:
+        Networks to visits in the self.visits list and displays key information, including:
             scheduling_status
             date
             time
@@ -481,7 +481,7 @@ class Patient(Human):
             return 0
 
         # Checks if the patient has active visits associated with them and prompt user to cancel or quit.
-        if self._visits:
+        if self.visits:
             prompt = """This patient has active appointments. 
                         Proceeding will cancel all requests. 
                         Are you sure you want to continue?"""
@@ -590,7 +590,7 @@ class Clinician(Human):
         self._end_placekey = None
         self._start_time = time(9)
         self._end_time = time(17)
-        self._visits = []
+        self.visits = []
         self._inactive_reason = None
 
     @property
@@ -725,7 +725,7 @@ class Clinician(Human):
 
             # View/modify scheduled visits
             elif selection == "1":
-                self.scheduled_visits()
+                self.assigned_visits()
 
             # Update start/end time and address
             elif selection == "2":
@@ -751,12 +751,52 @@ class Clinician(Human):
             else:
                 print("Invalid selection.")
 
-    def scheduled_visits(self):
+    def assigned_visits(self):
         """
-        Grabs all visits from self._visits and displays schedule for user by day.
+        Grabs all visits from self.visits and displays schedule for user by day.
         :return: 1 if successful
         """
-        pass
+        # Prompt user for date of visit
+        inp_date = validate.qu_input("Please select a date to view assigned visits: ")
+
+        if not inp_date:
+            return 0
+
+        exp_date = validate.valid_date(inp_date)
+
+        # Initialize all visits and add to list for display
+        visit_list = []
+
+        for index, visit_id in enumerate(self.visits):
+            visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
+
+            if not visit:
+                continue
+
+            if visit._exp_date == exp_date:
+                print(f"{index}) ID: {visit.id}, Patient: {visit.patient_name}, Time Window: {visit.time_earliest} - {visit.time_latest}")
+                visit_list.append(visit_id)
+
+        if not visit_list:
+            print("There are no visits scheduled for this date.")
+            return 0
+
+        # Prompt user for visit to modify and validate against visit list
+        selection = validate.qu_input("Please select a visit by index or ID to modify: ")
+
+        if not selection:
+            return 0
+
+        visit_id = validate.valid_cat_list(selection, self.visits)
+
+        if not visit_id or isinstance(visit_id, Exception):
+            return 0
+
+        # Load visit if valid id and go to visit menu
+        else:
+            visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
+            visit.update_self()
+            return 1
 
     def update_start_end(self):
         """Sets the starting and ending time/geocoded address for the clinician

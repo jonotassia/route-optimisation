@@ -6,7 +6,6 @@ import in_out
 import classes
 import navigation
 from datetime import datetime, date
-import placekey as pk
 
 
 class Visit:
@@ -16,9 +15,9 @@ class Visit:
     _c_sched_status = ("unassigned", "assigned", "no show", "cancelled")
     _c_cancel_reason = ("clinician unavailable", "patient unavailable", "no longer needed", "expired", "system action")
 
-    def __init__(self, pat_id, status=1, sched_status="unscheduled", address="", time_earliest="", time_latest="", exp_date=""):
+    def __init__(self, pat_id, status=1, sched_status="unscheduled", time_earliest="", time_latest="", exp_date=""):
         """Initializes a new request and links with pat_id. It contains the following attributes:
-            req_id, pat_id, name, status, address, the earliest time, latest time, sched status, and cancel_reason"""
+            req_id, pat_id, name, status, the earliest time, latest time, sched status, and cancel_reason"""
         self._id = next(self._id_iter)
         self._pat_id = pat_id
         self._clin_id = None
@@ -275,12 +274,35 @@ class Visit:
             # Display visit details to user
             self.show_visit_details()
 
-            selection = validate.yes_or_no('Are you sure you want to continue reassigning this visit?')
+            while True:
+                selection = validate.qu_input('What would you like to do:\n'
+                                              '1. Unassign the visit\n'
+                                              '2. Reassign the visit to another clinician\n')
 
-            if not selection:
-                return 0
+                if not selection:
+                    return 0
+
+                # if unassign visit, unassign from clinician in clin_id
+                elif selection == "1":
+                    self.unassign_visit()
+                    return 1
+
+                # If reassign visit, just continue with function
+                elif selection == "2":
+                    break
+
+                else:
+                    print("Invalid selection.")
 
         # If neither of the above conditions are true, allow user to reassign visit by selecting a clinician.
+        if self.assign_to_clinician():
+            return 1
+
+    def assign_to_clinician(self):
+        """
+        Assigns the visit to a clinician.
+        :return: 1 if successful
+        """
         print("Please select a clinician to assign this visit.")
         clin = classes.person.Clinician.load_self()
 
@@ -288,7 +310,7 @@ class Visit:
             return 0
 
         # Append visit ID to clinician's visit list and vice versa
-        clin._visits.append(self.id)
+        clin.visits.append(self.id)
         self._clin_id = clin.id
         self._sched_status = self._c_sched_status[1]
 
@@ -299,6 +321,29 @@ class Visit:
 
         else:
             self.refresh_self()
+            return 0
+
+    def unassign_visit(self):
+        """
+        Assigns the visit to a clinician.
+        :return: 1 if successful
+        """
+        # Remove visit from assigned clinician
+        clin = in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{self._clin_id}.pkl")
+
+        # If linked clinician fails to load, refresh and cancel action.
+        if not clin:
+            print("Unable to load linked clinician.")
+            self.refresh_self()
+            return 0
+
+        clin.visits.remove(self.id)
+        clin.write_self()
+
+        self._clin_id = ""
+        self.write_self()
+
+        return 1
 
     def show_visit_details(self):
         """
@@ -307,6 +352,7 @@ class Visit:
         """
         # Output linked visit details
         detail_dict = {
+            "Visit ID": self.id,
             "Patient": self.patient_name,
             "Clinician": self.clinician_name,
             "Visit Address": self.address,
@@ -316,6 +362,8 @@ class Visit:
 
         for k, v in detail_dict.items():
             print(f"{k}: {v}")
+
+        print("\n")
 
     def write_self(self):
         """Writes the object to file as a .pkl using the pickle module"""
