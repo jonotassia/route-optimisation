@@ -15,7 +15,7 @@ class Visit:
     _c_sched_status = ("unassigned", "assigned", "no show", "cancelled")
     _c_cancel_reason = ("clinician unavailable", "patient unavailable", "no longer needed", "expired", "system action")
 
-    def __init__(self, pat_id, status=1, sched_status="unscheduled", time_earliest="", time_latest="", exp_date=""):
+    def __init__(self, pat_id, status=1, address="", sched_status="unscheduled", time_earliest="", time_latest="", exp_date=""):
         """Initializes a new request and links with pat_id. It contains the following attributes:
             req_id, pat_id, name, status, the earliest time, latest time, sched status, and cancel_reason"""
         self._id = next(self._id_iter)
@@ -75,22 +75,31 @@ class Visit:
     @property
     def address(self):
         """
-        Address pulled from linked patient.
+        Displays an address parsed using USAddress. Loops through values in dictionary to output human-readable address.
         :return: Human-readable address
         """
-        # TODO: Add building name so it appears conditionally
         pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}.pkl")
         return pat.address
 
     @property
-    def placekey(self):
+    def zip_code(self):
         pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}.pkl")
-        return pat.placekey
+        return pat.zip_code
+
+    @property
+    def building(self):
+        pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}.pkl")
+        return pat.building
 
     @property
     def coord(self):
         pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}.pkl")
         return pat.coord
+
+    @property
+    def place_id(self):
+        pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}.pkl")
+        return pat.place_id
 
     @property
     def time_earliest(self):
