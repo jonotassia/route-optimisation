@@ -142,7 +142,7 @@ def valid_address(value):
             "address": response.json()["results"][0]["formatted_address"],
             "zip_code": zip_code,
             "building": building,
-            "place_code": response.json()["results"][0]["place_id"],
+            "plus_code": response.json()["results"][0]["plus_code"]["global_code"],
             "coord": (coord_details["lat"], coord_details["lng"])
         }
 

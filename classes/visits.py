@@ -97,9 +97,9 @@ class Visit:
         return pat.coord
 
     @property
-    def place_id(self):
+    def plus_code(self):
         pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}.pkl")
-        return pat.place_id
+        return pat.plus_code
 
     @property
     def time_earliest(self):

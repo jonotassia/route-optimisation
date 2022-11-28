@@ -142,8 +142,8 @@ class Human:
         return self._address["coord"]
 
     @property
-    def place_id(self):
-        return self._address["place_id"]
+    def plus_code(self):
+        return self._address["plus_code"]
 
     @property
     def team_id(self):
@@ -615,7 +615,7 @@ class Clinician(Human):
         Displays an address parsed using USAddress. Loops through values in dictionary to output human-readable address.
         :return: Human-readable address
         """
-        return self._start_address["address"]
+        return self._start_address["address"] if self._start_address else self.address["address"]
 
     @start_address.setter
     def start_address(self, value):
@@ -630,19 +630,19 @@ class Clinician(Human):
 
     @property
     def start_zip_code(self):
-        return self._start_address["zip_code"]
+        return self._start_address["zip_code"] if self._start_address else self.address["zip_code"]
 
     @property
     def start_building(self):
-        return self._start_address["building"]
+        return self._start_address["building"] if self._start_address else self.address["building"]
 
     @property
     def start_coord(self):
-        return self._start_address["coord"]
+        return self._start_address["coord"] if self._start_address else self.address["coord"]
 
     @property
-    def start_place_id(self):
-        return self._start_address["place_id"]
+    def start_plus_code(self):
+        return self._start_address["plus_code"] if self._start_address else self.address["plus_code"]
 
     @property
     def end_address(self):
@@ -650,7 +650,7 @@ class Clinician(Human):
         Displays an address parsed using USAddress. Loops through values in dictionary to output human-readable address.
         :return: Human-readable address
         """
-        return self._end_address["address"]
+        return self._end_address["address"] if self._end_address else self.address["address"]
 
     @end_address.setter
     def end_address(self, value):
@@ -665,19 +665,19 @@ class Clinician(Human):
 
     @property
     def end_zip_code(self):
-        return self._end_address["zip_code"]
+        return self._end_address["zip_code"] if self._end_address else self.address["zip_code"]
 
     @property
     def end_building(self):
-        return self._end_address["building"]
+        return self._end_address["building"] if self._end_address else self.address["building"]
 
     @property
     def end_coord(self):
-        return self._end_address["coord"]
+        return self._end_address["coord"] if self._end_address else self.address["coord"]
 
     @property
-    def end_place_id(self):
-        return self._end_address["place_id"]
+    def end_plus_code(self):
+        return self._end_address["plus_code"] if self._end_address else self.address["plus_code"]
 
     @property
     def start_time(self):

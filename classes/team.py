@@ -81,8 +81,8 @@ class Team:
         return self._address["coord"]
 
     @property
-    def place_id(self):
-        return self._address["place_id"]
+    def plus_code(self):
+        return self._address["plus_code"]
 
     def update_self(self):
         """
