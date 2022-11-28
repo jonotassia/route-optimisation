@@ -586,9 +586,7 @@ class Clinician(Human):
 
         self._id = next(self._id_iter)
         self._start_address = address
-        self._start_placekey = None
         self._end_address = address
-        self._end_placekey = None
         self._start_time = time(9)
         self._end_time = time(17)
         self.visits = []

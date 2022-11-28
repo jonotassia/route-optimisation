@@ -6,6 +6,8 @@ import validate
 import navigation
 import boto3
 import requests
+from ortools.constraint_solver import routing_enums_pb2
+from ortools.constraint_solver import pywrapcp
 
 # TODO: Complete some hyperparameter tuning in jupyter notebook
 
@@ -53,6 +55,40 @@ def optimize_trip(clin_id=""):
     # Generate distance matrix
     dist_matrix = create_dist_matrix(plus_code_list)
 
+    # Create index/routing manager - location number corresponds to index in distance matrix (0 = start, last = end)
+    manager = pywrapcp.RoutingIndexManager(len(dist_matrix), 1, 0, len(dist_matrix)-1)
+    routing = pywrapcp.RoutingModel(manager)
+
+    def transit_callback(from_index, to_index):
+        """
+        Accepts a from and to index and returns the corresponding part of the distance matrix
+        :param from_index: index of departure location
+        :param to_index: index of arrival location
+        :return: travel time between 2
+        """
+        # Convert from routing variable Index to distance matrix NodeIndex
+        from_node = manager.IndexToNode(from_index)
+        to_node = manager.IndexToNode(to_index)
+        return dist_matrix[from_node][to_node]
+
+    # Create a callback index using the transit time callback nested function
+    transit_callback_index = routing.RegisterTransitCallback(transit_callback)
+
+    # Enable the routing function to use this transit time as its arc cost measurement
+    routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
+
+    # Set the search parameters and a heuristic for initial solution (prioritize cheapest arc - ie least transit time)
+    search_parameters = pywrapcp.DefaultRoutingSearchParameters()
+    search_parameters.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
+
+    # Solve the problem and print the solution
+    solution = routing.SolveWithParameters(search_parameters)
+    if solution:
+        route_order, route_time = return_solution(manager, routing, solution)
+        print_solution(manager, routing, solution)
+
+    # TODO: Make sure this assigns the visits to clinicians
+
 
 def create_dist_matrix(plus_code_list):
     """
@@ -81,7 +117,7 @@ def create_dist_matrix(plus_code_list):
         mode = validate.valid_cat_list(inp_mode, mode_list)
 
         if mode:
-           break
+            break
 
     # Define constraints for creating distance matrix - maximum 100 elements per query based on num origins and dests
     max_elements = 100
@@ -171,6 +207,58 @@ def build_dist_matrix(response):
     return distance_matrix
 
 
+def print_solution(manager, routing, solution):
+    """
+    Prints the solution to the route optimisation problem to the console.
+    :param manager: Index manager - parses details from distance matrix
+    :param routing: Routing Model - sets parameters for solution
+    :param solution: Solution from routing model
+    :return: None
+    """
+    print(f"Objective: {solution.ObjectiveValue()} minutes.")
+    index = routing.Start(0)
+    plan_output = "Optimal route for clinician: \n"
+    route_time = 0
+
+    # Add each index to plan_output
+    while not routing.IsEnd(index):
+        plan_output += f'  {manager.IndexToNode(index)} ->'
+        previous_index = index
+        index = solution.Value(routing.NextVar(index))
+        route_time += routing.GetArcCostForVehicle(previous_index, index, 0)
+
+    # Add final index
+    plan_output += f' {manager.IndexToNode(index)}'
+    print(plan_output)
+    plan_output += f'Route distance: {route_time} minutes.'
+
+
+def return_solution(manager, routing, solution):
+    """
+    Returns the solution to the route optimisation problem to the console.
+    :param manager: Index manager - parses details from distance matrix
+    :param routing: Routing Model - sets parameters for solution
+    :param solution: Solution from routing model
+    :return: solution as a list of indices
+    """
+    print(f"Objective: {solution.ObjectiveValue()} minutes.")
+    index = routing.Start(0)
+    route_order = []
+    route_time = 0
+
+    # Add each index to plan_output
+    while not routing.IsEnd(index):
+        route_order.append(manager.IndexToNode(index))
+        previous_index = index
+        index = solution.Value(routing.NextVar(index))
+        route_time += routing.GetArcCostForVehicle(previous_index, index, 0)
+
+    # Add final index
+    route_order.append(manager.IndexToNode(index))
+
+    return route_order, route_time
+
+
 def optimize_team(team_id=""):
     """
     Optimizes all clinicians' schedules within a team by day based on distance traveled.
@@ -191,18 +279,3 @@ def optimize_team(team_id=""):
     pass
 
 
-def coord_average(coord_list):
-    """
-    Finds the average point between all coordinates in the coordinate list in order to center the map.
-    :param coord_list: List of tuples containing coordinate information
-    :return: Tuple of average longitude and latitude
-    """
-    # Split latitude and longitude
-    lat_list = np.array([coord[0] for coord in coord_list])
-    long_list = np.array([coord[1] for coord in coord_list])
-
-    # Average latitude and longitude
-    mean_lat = lat_list.mean()
-    mean_long = long_list.mean()
-
-    return mean_lat, mean_long
