@@ -8,7 +8,8 @@ import boto3
 import requests
 from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
-
+import flask
+from flask import Flask
 
 def optimize_trip(clin_id=""):
     """
@@ -58,6 +59,9 @@ def optimize_trip(clin_id=""):
     # Resequence and plot on map
     ordered_route = [plus_code_list[i] for i in route_order]
     plot_route(ordered_route)
+
+    # TODO: Add constraints for already assigned visits
+    # TODO: Add constraints for start and end time
 
 
 def route_optimizer(dist_matrix, num_clinicians, start_list, end_list):
@@ -270,13 +274,38 @@ def return_solution(manager, routing, solution):
     return route_order
 
 
+def coord_average(coord_list):
+    """
+    Finds the average point between all coordinates in the coordinate list in order to center the map.
+    :param coord_list: List of tuples containing coordinate information
+    :return: Tuple of average longitude and latitude
+    """
+    # Split latitude and longitude
+    lat_list = np.array([coord[0] for coord in coord_list])
+    long_list = np.array([coord[1] for coord in coord_list])
+
+    # Average latitude and longitude
+    mean_lat = lat_list.mean()
+    mean_long = long_list.mean()
+
+    return mean_lat, mean_long
+
+
 def plot_route(route):
     """
-    Uses Google Maps JavaScript API to display a map on a webpage.
-    :param route: Ordered list of geocoded addresses to plot
+    Uses Google Maps JavaScript API and Flask to display a map on a webpage.
+    :param route: Ordered list of coordinates to plot
     :return: None
     """
-    pass
+    app = Flask(__name__)
+
+    center = coord_average(route)
+
+    @app.route("/")
+    def index():
+        return flask.render_template('map.html', geocode=route, center=center)
+
+    app.run(host='0.0.0.0', port=8080, debug=True)
 
 
 def optimize_team(team_id=""):
