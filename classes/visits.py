@@ -15,7 +15,7 @@ class Visit:
     _c_sched_status = ("unassigned", "assigned", "no show", "cancelled")
     _c_cancel_reason = ("clinician unavailable", "patient unavailable", "no longer needed", "expired", "system action")
 
-    def __init__(self, pat_id, status=1, sched_status="unscheduled", time_earliest="", time_latest="", exp_date=""):
+    def __init__(self, pat_id, status=1, address="", sched_status="unscheduled", time_earliest="", time_latest="", exp_date=""):
         """Initializes a new request and links with pat_id. It contains the following attributes:
             req_id, pat_id, name, status, the earliest time, latest time, sched status, and cancel_reason"""
         self._id = next(self._id_iter)
@@ -75,22 +75,31 @@ class Visit:
     @property
     def address(self):
         """
-        Address pulled from linked patient.
+        Displays an address parsed using USAddress. Loops through values in dictionary to output human-readable address.
         :return: Human-readable address
         """
-        # TODO: Add building name so it appears conditionally
         pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}.pkl")
         return pat.address
 
     @property
-    def placekey(self):
+    def zip_code(self):
         pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}.pkl")
-        return pat.placekey
+        return pat.zip_code
+
+    @property
+    def building(self):
+        pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}.pkl")
+        return pat.building
 
     @property
     def coord(self):
         pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}.pkl")
         return pat.coord
+
+    @property
+    def plus_code(self):
+        pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}.pkl")
+        return pat.plus_code
 
     @property
     def time_earliest(self):
@@ -531,13 +540,38 @@ class Visit:
         for instance in cls._tracked_instances:
             try:
                 with open(f"./data/{cls.__qualname__}/{instance['id']}", "rb") as read_file:
-                    request = pickle.load(read_file)
+                    visit = pickle.load(read_file)
 
                     # Evaluate date against current date and mark as expired if due before current date
-                    if datetime.strptime(request.exp_date, '%d-%m-%Y').date() < date.today():
-                        request.status = 0
-                        request.cancel_reason = cls._c_cancel_reason[3]
-                        cls.write_self(request)
+                    if datetime.strptime(visit.exp_date, '%d-%m-%Y').date() < date.today():
+                        visit.status = 0
+                        visit.cancel_reason = cls._c_cancel_reason[3]
+
+                        # Remove visit from patient's list
+                        patient = in_out.load_obj(classes.person.Patient, f"./data/Patient/{visit._pat_id}.pkl")
+
+                        # If any linked patient fails to load, refresh and cancel action.
+                        if not patient:
+                            print("Unable to load linked patient.")
+                            visit.refresh_self()
+                            return 0
+
+                        patient.visits.remove(visit.id)
+                        patient.write_self()
+
+                        # Remove visit from assigned clinician
+                        clin = in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{visit._clin_id}.pkl")
+
+                        # If linked clinician fails to load, refresh and cancel action.
+                        if not clin:
+                            print("Unable to load linked clinician.")
+                            visit.refresh_self()
+                            return 0
+
+                        clin.visits.remove(visit.id)
+                        clin.write_self()
+
+                        cls.write_self(visit)
 
             except FileNotFoundError as err:
                 print("File could not be found.")

@@ -3,10 +3,11 @@ from datetime import datetime
 from Levenshtein import ratio as levratio
 import re
 import usaddress
+import requests
 import classes.person
 import navigation
 import boto3
-from placekey.api import PlacekeyAPI
+
 
 def qu_input(prompt):
     value = input(prompt)
@@ -63,39 +64,89 @@ def valid_name(value):
 
 
 def valid_address(value):
-    """Uses Place Key api to ensure address is valid: https://www.placekey.io/blog/getting-started-with-placekey-io
+    """Uses Google Geocoding api to ensure address is valid: https://developers.google.com/maps/documentation/geocoding
         Returns address dictionary with keys for street, building/apt number, city, state, country, and post code."""
     # Initiate AWS SSM integration for secrets storage
     ssm = boto3.client('ssm')
 
-    # Grab api key from AWS
-    placekey_api_key = ssm.get_parameter(Name="placekey_api_key", WithDecryption=True)
-    pk_api = PlacekeyAPI(placekey_api_key['Parameter']['Value'])
+    # Grab api key from AWS and authenticate with google
+    google_api_key = ssm.get_parameter(Name="GOOGLE_CLOUD_API_KEY", WithDecryption=True)["Parameter"]["Value"]
+
+    tag_mapping = {
+        'Recipient': 'recipient',
+        'AddressNumber': 'street_address',
+        'AddressNumberPrefix': 'street_address',
+        'AddressNumberSuffix': 'street_address',
+        'StreetName': 'street_address',
+        'StreetNamePreDirectional': 'street_address',
+        'StreetNamePreModifier': 'street_address',
+        'StreetNamePreType': 'street_address',
+        'StreetNamePostDirectional': 'street_address',
+        'StreetNamePostModifier': 'street_address',
+        'StreetNamePostType': 'street_address',
+        'LandmarkName': 'building',
+        'BuildingName': 'building',
+        'OccupancyType': 'building',
+        'OccupancyIdentifier': 'building',
+        'SubaddressIdentifier': 'building',
+        'SubaddressType': 'building',
+        'PlaceName': 'city',
+        'StateName': 'state',
+        'ZipCode': 'zip_code',
+    }
 
     # Parse address text from user
     try:
-        address = usaddress.tag(value)
+        address = usaddress.tag(value, tag_mapping)
 
     except usaddress.RepeatedLabelError as err:
         return err
 
-    # Verify address is real using Placekey API. If real, return address.
+    # Prepare the address for query in JSON request
+    address_query = [v for v in address[0].values()]
+
+    payload = {
+        "address": " ".join(address_query).replace(" ", "+"),
+        "key": google_api_key
+    }
+
+    # Verify address is real using Google geocoding API. If real, return address.
     try:
-        address_query = {
-            "street_address": f'{address[0]["AddressNumber"]} {address[0]["StreetNamePreDirectional"]} {address[0]["StreetName"]} {address[0]["StreetNamePostType"]}',
-            "city": address[0]["PlaceName"],
-            "region": address[0]["StateName"],
-            "postal_code": address[0]["ZipCode"],
-            "iso_country_code": "US"
+        response = requests.get(
+            f"https://maps.googleapis.com/maps/api/geocode/json?",
+            params=payload
+        )
+
+    except requests.exceptions.RequestException:
+        print("Unable to validate address. Please try again.")
+        return 0
+
+    # Save and return relevant address information - Address, zip code, place_id, and coordinates.
+    if response.status_code == 200:
+        # Prepare coordinate details
+        coord_details = response.json()["results"][0]["geometry"]["location"]
+
+        # Extract zip code and building info from response
+        zip_code = None
+        building = None
+
+        for component in response.json()["results"][0]["address_components"]:
+            if "postal_code" in component["types"]:
+                zip_code = component["long_name"]
+
+            if "premise" in component["types"]:
+                building = component["long_name"]
+
+        # Populate address dictionary
+        address = {
+            "address": response.json()["results"][0]["formatted_address"],
+            "zip_code": zip_code,
+            "building": building,
+            "plus_code": response.json()["results"][0]["plus_code"]["global_code"],
+            "coord": (coord_details["lat"], coord_details["lng"])
         }
 
-    except KeyError as err:
-        return err
-
-    placekey = pk_api.lookup_placekey(**address_query)
-
-    if placekey:
-        return address, placekey
+        return address
 
     else:
         return ValueError

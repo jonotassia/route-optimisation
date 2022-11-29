@@ -40,7 +40,7 @@ def write_obj(obj):
     return 1
 
 
-def get_obj(cls):
+def get_obj(cls, inc_inac=0):
     """
     Class method to initialise a class instance from file. Returns the file as an object
     Prompts user to include inactive records as well.
@@ -52,9 +52,6 @@ def get_obj(cls):
         # Quit if q or blank is entered
         if not search_obj:
             return 0
-
-        # Prompt and flag for including inactive records
-        inc_inac = True if validate.yes_or_no("Include inactive? ") else False
 
         # If not an id, search for instance in self.tracked_instances
         if search_obj.isnumeric():

@@ -4,7 +4,6 @@ import validate
 import in_out
 import classes
 import navigation
-import placekey as pk
 
 
 class Team:
@@ -56,31 +55,34 @@ class Team:
         Displays an address parsed using USAddress. Loops through values in dictionary to output human-readable address.
         :return: Human-readable address
         """
-        # TODO: Add building name so it appears conditionally
-        disp_address = f'{self._address[0]["AddressNumber"]} {self._address[0]["StreetNamePreDirectional"]} ' \
-                       f'{self._address[0]["StreetName"]} {self._address[0]["StreetNamePostType"]}, ' \
-                       f'{self._address[0]["PlaceName"]}, ' \
-                       f'{self._address[0]["StateName"]}, ' \
-                       f'{self._address[0]["ZipCode"]}, ' \
-                       f'US'
-
-        return disp_address
+        return self._address["address"]
 
     @address.setter
     def address(self, value):
         """Checks values of address before assigning"""
-        address, placekey = validate.valid_address(value)
+        address = validate.valid_address(value)
 
         if not isinstance(address, Exception):
             self._address = address
-            self._placekey = placekey
 
         else:
             raise ValueError("Please enter a complete and valid address.\n")
 
     @property
+    def zip_code(self):
+        return self._address["zip_code"]
+
+    @property
+    def building(self):
+        return self._address["building"]
+
+    @property
     def coord(self):
-        return pk.placekey_to_geo(self._placekey)
+        return self._address["coord"]
+
+    @property
+    def plus_code(self):
+        return self._address["plus_code"]
 
     def update_self(self):
         """
