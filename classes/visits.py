@@ -540,13 +540,38 @@ class Visit:
         for instance in cls._tracked_instances:
             try:
                 with open(f"./data/{cls.__qualname__}/{instance['id']}", "rb") as read_file:
-                    request = pickle.load(read_file)
+                    visit = pickle.load(read_file)
 
                     # Evaluate date against current date and mark as expired if due before current date
-                    if datetime.strptime(request.exp_date, '%d-%m-%Y').date() < date.today():
-                        request.status = 0
-                        request.cancel_reason = cls._c_cancel_reason[3]
-                        cls.write_self(request)
+                    if datetime.strptime(visit.exp_date, '%d-%m-%Y').date() < date.today():
+                        visit.status = 0
+                        visit.cancel_reason = cls._c_cancel_reason[3]
+
+                        # Remove visit from patient's list
+                        patient = in_out.load_obj(classes.person.Patient, f"./data/Patient/{visit._pat_id}.pkl")
+
+                        # If any linked patient fails to load, refresh and cancel action.
+                        if not patient:
+                            print("Unable to load linked patient.")
+                            visit.refresh_self()
+                            return 0
+
+                        patient.visits.remove(visit.id)
+                        patient.write_self()
+
+                        # Remove visit from assigned clinician
+                        clin = in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{visit._clin_id}.pkl")
+
+                        # If linked clinician fails to load, refresh and cancel action.
+                        if not clin:
+                            print("Unable to load linked clinician.")
+                            visit.refresh_self()
+                            return 0
+
+                        clin.visits.remove(visit.id)
+                        clin.write_self()
+
+                        cls.write_self(visit)
 
             except FileNotFoundError as err:
                 print("File could not be found.")

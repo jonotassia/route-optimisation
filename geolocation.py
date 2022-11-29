@@ -9,8 +9,6 @@ import requests
 from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 
-# TODO: Complete some hyperparameter tuning in jupyter notebook
-
 
 def optimize_trip(clin_id=""):
     """
@@ -21,7 +19,6 @@ def optimize_trip(clin_id=""):
     :param clin_id: ID of clinician (if in clinician context)
     :return: List of tuples of appointment coordinates for optimal travel time
     """
-    # TODO: Figure out how to enforce clinician start and end locations and time window. Consider CustomFitness
     # Load a clinician to optimize. If id is passed through, do not prompt for ID.
     if clin_id:
         clin = in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{clin_id}.pkl")
@@ -55,8 +52,25 @@ def optimize_trip(clin_id=""):
     # Generate distance matrix
     dist_matrix = create_dist_matrix(plus_code_list)
 
+    # Calculate optimal route
+    route_order = route_optimizer(dist_matrix, num_clinicians=1, start_list=0, end_list=(len(dist_matrix)-1))
+
+    # Resequence and plot on map
+    ordered_route = [plus_code_list[i] for i in route_order]
+    plot_route(ordered_route)
+
+
+def route_optimizer(dist_matrix, num_clinicians, start_list, end_list):
+    """
+    Passes locations through route optimizer to generate optimal route solution.
+    :param dist_matrix:
+    :param num_clinicians: Number of clinicians to consider in calculation
+    :param start_list: List of starting location indexes for each clinician
+    :param end_list: List of ending location indexes for each clinician
+    :return: List of indices ordered by most efficient route
+    """
     # Create index/routing manager - location number corresponds to index in distance matrix (0 = start, last = end)
-    manager = pywrapcp.RoutingIndexManager(len(dist_matrix), 1, 0, len(dist_matrix)-1)
+    manager = pywrapcp.RoutingIndexManager(len(dist_matrix), num_clinicians, start_list, end_list)
     routing = pywrapcp.RoutingModel(manager)
 
     def transit_callback(from_index, to_index):
@@ -83,11 +97,11 @@ def optimize_trip(clin_id=""):
 
     # Solve the problem and print the solution
     solution = routing.SolveWithParameters(search_parameters)
-    if solution:
-        route_order, route_time = return_solution(manager, routing, solution)
-        print_solution(manager, routing, solution)
 
-    # TODO: Make sure this assigns the visits to clinicians
+    if solution:
+        print_solution(manager, routing, solution)
+        route_order = return_solution(manager, routing, solution)
+        return route_order
 
 
 def create_dist_matrix(plus_code_list):
@@ -244,19 +258,25 @@ def return_solution(manager, routing, solution):
     print(f"Objective: {solution.ObjectiveValue()} minutes.")
     index = routing.Start(0)
     route_order = []
-    route_time = 0
 
     # Add each index to plan_output
     while not routing.IsEnd(index):
         route_order.append(manager.IndexToNode(index))
-        previous_index = index
         index = solution.Value(routing.NextVar(index))
-        route_time += routing.GetArcCostForVehicle(previous_index, index, 0)
 
     # Add final index
     route_order.append(manager.IndexToNode(index))
 
-    return route_order, route_time
+    return route_order
+
+
+def plot_route(route):
+    """
+    Uses Google Maps JavaScript API to display a map on a webpage.
+    :param route: Ordered list of geocoded addresses to plot
+    :return: None
+    """
+    pass
 
 
 def optimize_team(team_id=""):
@@ -278,4 +298,5 @@ def optimize_team(team_id=""):
 
     pass
 
+    # TODO: Make sure this assigns the visits to clinicians
 
