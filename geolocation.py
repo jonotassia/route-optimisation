@@ -64,6 +64,9 @@ def optimize_trip(clin_id=""):
 
     # TODO: Add constraints for start and end time
 
+    # TODO: Add constraints for already assigned visits
+    # TODO: Add constraints for start and end time
+
 
 def route_optimizer(dist_matrix, num_clinicians, start_list, end_list):
     """
