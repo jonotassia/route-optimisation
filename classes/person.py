@@ -260,7 +260,7 @@ class Patient(Human):
 
         self._id = next(self._id_iter)
         self._inactive_reason = None
-        self.visits = []
+        self.visits = {}
         self._death_date = None
         self._death_time = None
 
@@ -369,14 +369,26 @@ class Patient(Human):
         Sorts visits in order of expected date and time.
         :return: 1 if successful
         """
-        # TODO: Update so it only outputs a specific day
+        # TODO: Hide inactive visits
+        # Prompt user for date to view and validate format
+        while True:
+            inp_date = validate.qu_input("Please select a date to view: ")
+
+            if not inp_date:
+                return 0
+
+            val_date = validate.valid_date(inp_date)
+
+            if val_date:
+                break
+
         if not self.visits:
             print("This patient does not have any linked visits.")
             sleep(1.5)
             return 0
 
         # Display list of requests linked to patient.
-        for count, visit_id in enumerate(self.visits):
+        for count, visit_id in enumerate(self.visits[val_date]):
             visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
 
             print(f"{count + 1}) Visit ID: {visit.id}"
@@ -393,7 +405,7 @@ class Patient(Human):
                 return 0
 
             # Raise error if not in list
-            visit_id = validate.valid_cat_list(selection, self.visits)
+            visit_id = validate.valid_cat_list(selection, self.visits[val_date])
 
             if isinstance(visit_id, Exception):
                 print("Invalid selection.")
@@ -524,24 +536,26 @@ class Patient(Human):
 
         prompt = "Are you sure you want to inactivate this record?"
         if validate.yes_or_no(prompt):
+            self.status = 0
             # Cancel linked visit requests with a reason of system action. This occurs here rather than above to
             # give user the opportunity to back out changes before cancelling visits.
             if self.visits:
-                for visit_id in self.visits:
-                    visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}")
+                for visit_list in self.visits.values():
+                    for visit_id in visit_list:
+                        visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}")
 
-                    # If any linked visits fail to load, refresh and cancel action.
-                    if not visit:
-                        print("Unable to load linked visits.")
-                        self.refresh_self()
-                        return 0
+                        # If any linked visits fail to load, refresh and cancel action.
+                        if not visit:
+                            print("Unable to load linked visits.")
+                            self.refresh_self()
+                            return 0
 
-                    visit.status = 0
-                    visit.cancel_reason = visit._c_cancel_reason[4]
+                        visit.status = 0
+                        visit.cancel_reason = visit._c_cancel_reason[4]
 
-                    visit.write_self()
+                        visit.write_self()
 
-                    print("Visits successfully cancelled.")
+                        print("Visits successfully cancelled.")
 
             # Remove from team
             if self.team_id:
@@ -589,7 +603,7 @@ class Clinician(Human):
         self._end_address = address
         self._start_time = time(9)
         self._end_time = time(17)
-        self.visits = []
+        self.visits = {}
         self._inactive_reason = None
 
     @property
@@ -761,26 +775,30 @@ class Clinician(Human):
         Grabs all visits from self.visits and displays schedule for user by day.
         :return: 1 if successful
         """
-        # Prompt user for date of visit
-        inp_date = validate.qu_input("Please select a date to view assigned visits: ")
+        # TODO: Hide inactive visits
+        # Prompt user for date to view visits
+        while True:
+            inp_date = validate.qu_input("Please select a date to optimize the route: ")
 
-        if not inp_date:
-            return 0
+            if not inp_date:
+                return 0
 
-        exp_date = validate.valid_date(inp_date)
+            val_date = validate.valid_date(inp_date)
+
+            if val_date:
+                break
 
         # Initialize all visits and add to list for display
         visit_list = []
 
-        for index, visit_id in enumerate(self.visits):
+        for index, visit_id in enumerate(self.visits[val_date]):
             visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
 
             if not visit:
                 continue
 
-            if visit._exp_date == exp_date:
-                print(f"{index}) ID: {visit.id}, Patient: {visit.patient_name}, Time Window: {visit.time_earliest} - {visit.time_latest}")
-                visit_list.append(visit_id)
+            print(f"{index}) ID: {visit.id}, Patient: {visit.patient_name}, Time Window: {visit.time_earliest} - {visit.time_latest}")
+            visit_list.append(visit_id)
 
         if not visit_list:
             print("There are no visits scheduled for this date.")
@@ -929,39 +947,67 @@ class Clinician(Human):
             print("This record is already inactive.")
             return 0
 
-        else:
-            attr_list = [
-                {
-                    "term": "Inactivation Reason: ",
-                    "attr": "inactive_reason",
-                    "cat_list": self._c_inactive_reason
-                }
-            ]
+        # Checks if the clinician has active visits associated with them and prompt user to cancel or quit.
+        if self.visits:
+            prompt = """This clinician has assigned visits. 
+                        Proceeding will remove the clinician from all requests. 
+                        Are you sure you want to continue?"""
 
-            if not validate.get_info(self, attr_list):
+            if not validate.yes_or_no(prompt):
+                return 0
+
+        attr_list = [
+            {
+                "term": "Inactivation Reason: ",
+                "attr": "inactive_reason",
+                "cat_list": self._c_inactive_reason
+            }
+        ]
+
+        if not validate.get_info(self, attr_list):
+            self.refresh_self()
+            return 0
+
+        prompt = "Are you sure you want to inactivate this record?"
+        if validate.yes_or_no(prompt):
+            self.status = 0
+
+            # Remove clinician from linked visit. This occurs here rather than above to
+            # give user the opportunity to back out changes before unassigning visits.
+            if self.visits:
+                for visit_list in self.visits.values():
+                    for visit_id in visit_list:
+                        visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}")
+
+                        # If any linked visits fail to load, refresh and cancel action.
+                        if not visit:
+                            print("Unable to load linked visits.")
+                            self.refresh_self()
+                            return 0
+
+                        # Remove clinician from visits and remove visits from clinician
+                        visit._clin_id = None
+                        self.visits = {}
+                        visit.write_self()
+
+                        print("Visits successfully unassigned.")
+
+            # Remove from team
+            team = in_out.load_obj(classes.team.Team, f"./data/Team/{self._team_id}")
+
+            # If linked team fails to load, refresh and cancel action.
+            if not team:
+                print("Unable to load linked teams.")
                 self.refresh_self()
                 return 0
 
-            prompt = "Are you sure you want to inactivate this record?"
-            if validate.yes_or_no(prompt):
-                self.status = 0
+            team.clin_id.remove(self.id)
+            team.write_self()
 
-                # Remove from team
-                team = in_out.load_obj(classes.team.Team, f"./data/Team/{self._team_id}")
+            print("Team successfully unlinked.")
 
-                # If any linked clinicians fail to load, refresh and cancel action.
-                if not team:
-                    print("Unable to load linked teams.")
-                    self.refresh_self()
-                    return 0
+            self.write_self()
 
-                team.clin_id.remove(self.id)
-                team.write_self()
+            print("Record successfully inactivated.")
 
-                print("Team successfully unlinked.")
-
-                self.write_self()
-
-                print("Record successfully inactivated.")
-
-                return 1
+            return 1
