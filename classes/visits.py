@@ -318,8 +318,13 @@ class Visit:
         if not clin:
             return 0
 
-        # Append visit ID to clinician's visit list and vice versa
-        clin.visits.append(self.id)
+        # Create or add to the visit by date list for clinician
+        try:
+            clin.visits[self.exp_date].append(self.id)
+
+        except KeyError:
+            clin.visits[self._exp_date] = [self.id]
+
         self._clin_id = clin.id
         self._sched_status = self._c_sched_status[1]
 
@@ -346,7 +351,8 @@ class Visit:
             self.refresh_self()
             return 0
 
-        clin.visits.remove(self.id)
+        # Remove visit from clinician and unassign clinician to visit
+        clin.visits[self.exp_date].remove(self.id)
         clin.write_self()
 
         self._clin_id = ""
@@ -438,7 +444,13 @@ class Visit:
 
         # Save each item if successful
         if obj.write_self():
-            pat.visits.append(obj._id)
+            # Create or add to the search by date list for visits
+            try:
+                pat.visits[obj.exp_date].append(obj.id)
+
+            except KeyError:
+                pat.visits[obj._exp_date] = [obj.id]
+
             pat.write_self()
 
         return 1
@@ -513,7 +525,7 @@ class Visit:
                 self.refresh_self()
                 return 0
 
-            patient.visits.remove(self.id)
+            patient.visits[self.exp_date].remove(self.id)
             patient.write_self()
 
             # Remove visit from assigned clinician
@@ -525,7 +537,7 @@ class Visit:
                 self.refresh_self()
                 return 0
 
-            clin.visits.remove(self.id)
+            clin.visits[self.exp_date].remove(self.id)
             clin.write_self()
 
             # Cancel visit
@@ -556,7 +568,7 @@ class Visit:
                             visit.refresh_self()
                             return 0
 
-                        patient.visits.remove(visit.id)
+                        patient.visits[visit.exp_date].remove(visit.id)
                         patient.write_self()
 
                         # Remove visit from assigned clinician
@@ -568,7 +580,7 @@ class Visit:
                             visit.refresh_self()
                             return 0
 
-                        clin.visits.remove(visit.id)
+                        clin.visits[visit.exp_date].remove(visit.id)
                         clin.write_self()
 
                         cls.write_self(visit)
@@ -578,3 +590,4 @@ class Visit:
                 return err
 
     # TODO: Add a class method to reactivate a record
+    # TODO: Add a method to find all visits today without a clinician

@@ -11,6 +11,7 @@ from ortools.constraint_solver import pywrapcp
 import flask
 from flask import Flask
 
+
 def optimize_trip(clin_id=""):
     """
     Optimizes a single clinician's schedule for the day based on distance traveled for all assigned visits on that day.
@@ -44,8 +45,7 @@ def optimize_trip(clin_id=""):
             break
 
     # Create a list of visits by loading all visits attached to the clinician only if they are scheduled for input date.
-    visits = [in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl") for visit_id in clin.visits
-              if visit_id in classes.visits.Visit._instance_by_date[val_date]]
+    visits = [in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl") for visit_id in clin.visits['val_date']]
 
     # Distill visits into list of place_ids and add the clinician's start and end address
     plus_code_list = clin.start_plus_code + [visit.plus_code for visit in visits] + clin.end_plus_code
@@ -56,9 +56,13 @@ def optimize_trip(clin_id=""):
     # Calculate optimal route
     route_order = route_optimizer(dist_matrix, num_clinicians=1, start_list=0, end_list=(len(dist_matrix)-1))
 
-    # Resequence and plot on map
-    ordered_route = [plus_code_list[i] for i in route_order]
-    plot_route(ordered_route)
+    # Resequence as coordinates. JavaScript API only works using coordinates
+    ordered_route_coords = [visits[i].coord for i in route_order]
+
+    # Plot coords on map
+    plot_coords(ordered_route_coords)
+
+    # TODO: Add constraints for start and end time
 
     # TODO: Add constraints for already assigned visits
     # TODO: Add constraints for start and end time
@@ -291,9 +295,9 @@ def coord_average(coord_list):
     return mean_lat, mean_long
 
 
-def plot_route(route):
+def plot_coords(route):
     """
-    Uses Google Maps JavaScript API and Flask to display a map on a webpage.
+    Uses Google Maps JavaScript API and Flask to display a map on a webpage with markers for each location.
     :param route: Ordered list of coordinates to plot
     :return: None
     """
@@ -304,6 +308,23 @@ def plot_route(route):
     @app.route("/")
     def index():
         return flask.render_template('map.html', geocode=route, center=center)
+
+    app.run(host='0.0.0.0', port=8080, debug=True)
+
+
+def show_route(route):
+    """
+    Uses Google Maps JavaScript API and Flask to display a map on a webpage with the calculated route for each visit.
+    :param route: Ordered list of coordinates to map
+    :return: None
+    """
+    app = Flask(__name__)
+
+    center = coord_average(route)
+
+    @app.route("/")
+    def index():
+        return flask.render_template('route.html', geocode=route, center=center)
 
     app.run(host='0.0.0.0', port=8080, debug=True)
 
@@ -327,5 +348,6 @@ def optimize_team(team_id=""):
 
     pass
 
+    # TODO: Add constraints for already assigned visits
     # TODO: Make sure this assigns the visits to clinicians
 
