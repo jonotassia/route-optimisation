@@ -11,10 +11,10 @@
     <!-- Latest compiled and minified CSS -->
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
     <link rel="stylesheet" type="text/css" href="{{url_for('static', filename='/css/style.css')}}" />
-    <script type="module" src="{{url_for('static', filename='/js/map.js')}}"></script>
+    <script type="module" src="{{url_for('static', filename='/js/route.js')}}"></script>
   </head>
   <body>
-    <h3>Today's Visits</h3>
+    <h3>Today's Route</h3>
     <!--The div element for the map -->
     <div id="map" data-geocode="{{geocode|tojson}}" data-center="{{center|tojson}}"></div>
 
