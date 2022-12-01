@@ -14,13 +14,13 @@ function initMap() {
     // Populate markers for route
     for (let i = 0; i < coord.length; i++) {
         const marker = new google.maps.Marker({
-            position: { lat: coord[i][0], lng: coord[i][1] },
+            position: new google.maps.LatLng(coord[i][0], coord[i][1]),
             map: map,
             label: {
                 color: '#000',
                 fontSize: '12px',
                 fontWeight: '600',
-                text: i.toString()
+                text: (i + 1).toString()
             }
         });
     }
