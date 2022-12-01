@@ -21,6 +21,7 @@ class Visit:
         self._id = next(self._id_iter)
         self._pat_id = pat_id
         self._clin_id = None
+        self._address = address
         self._name = "Visit" + str(self._id)
         self._status = status
         self._time_earliest = time_earliest
