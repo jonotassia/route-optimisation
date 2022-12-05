@@ -15,16 +15,16 @@ class Human:
     _tracked_instances = {}
     _c_sex_options = ("male", "female", "not specified")
 
-    def __init__(self, status=1, name="", dob="", sex="", address="{}"):
+    def __init__(self, status=1, name="", dob="", sex="", address="{}", **kwargs):
         """Initiates a human objects with the following attributes:
         id, first name, last name, middle name, date of birth, sex, and address."""
         self._placekey = None
         self._id = next(self._id_iter)
         self._status = status
-        self._name = name
-        self._dob = dob
-        self._sex = sex
-        self._address = address
+        self.name = name
+        self.dob = dob
+        self.sex = sex
+        self.address = address
         self._team_id = None
         self._team_name = None
 
@@ -51,12 +51,15 @@ class Human:
 
     @property
     def name(self):
+        # Parse middle name to confirm it exists, else return None
         try:
-            name = f"{self._name[0]}, {self._name[1]} {self._name[2] if self._name[2] else None}"
-            return name
+            middle_name = self._name[2]
 
-        except IndexError:
-            return None
+        except TypeError:
+            middle_name = None
+
+        name = f"{self._name[0]}, {self._name[1]} {middle_name}"
+        return name
 
     @name.setter
     def name(self, value):
@@ -70,15 +73,15 @@ class Human:
 
     @property
     def last_name(self):
-        return self.name[0]
+        return self._name[0]
 
     @property
     def first_name(self):
-        return self.name[1]
+        return self._name[1]
 
     @property
     def middle_name(self):
-        return self.name[2]
+        return self._name[2]
 
     @property
     def dob(self):
@@ -250,12 +253,13 @@ class Patient(Human):
     _tracked_instances = {}
     _c_inactive_reason = ("no longer under care", "expired", "added in error")
 
-    def __init__(self, status=1, name="", dob="", sex="", address=""):
+    def __init__(self, status=1, name="", dob="", sex="", address="", **kwargs):
         """
         Initiates and writes-to-file a patient with the following attributes:
         id, first name, last name, middle name, date of birth, sex, and address.
         Additionally, initializes a list of Visits linked to the patient
         """
+        # Inherit from top level class
         super().__init__(status, name, dob, sex, address)
 
         self._id = next(self._id_iter)
@@ -263,6 +267,9 @@ class Patient(Human):
         self.visits = {}
         self._death_date = None
         self._death_time = None
+
+        # Update all attributes from passed dict if provided
+        self.__dict__.update(kwargs)
 
     @property
     def inactive_reason(self):
@@ -590,21 +597,24 @@ class Clinician(Human):
 
     # TODO: Add licensure as an attribute
 
-    def __init__(self, status=1, name="", dob="", sex="", address=""):
+    def __init__(self, status=1, name="", dob="", sex="", address="", **kwargs):
         """Initiates and writes-to-file a clinician with the following attributes:
         id, first name, last name, middle name, date of birth, sex, and address
         Assumes standard shift time for start and end time, and inherits address for start/end address.
         These will be updated by a different function called update_start_end"""
-
+        # Inherit from superclass
         super().__init__(status, name, dob, sex, address)
 
         self._id = next(self._id_iter)
-        self._start_address = address
-        self._end_address = address
-        self._start_time = time(9)
-        self._end_time = time(17)
+        self.start_address = address
+        self.end_address = address
+        self.start_time = "800"
+        self.end_time = "1700"
         self.visits = {}
         self._inactive_reason = None
+
+        # Update all attributes from passed dict if provided
+        self.__dict__.update(kwargs)
 
     @property
     def inactive_reason(self):

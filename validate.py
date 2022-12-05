@@ -52,15 +52,30 @@ def valid_date(value):
 
 def valid_name(value):
     """Gathers name information. Returns first name, middle name, and last name"""
-    name_regex = re.compile(r"([A-Za-z]+),\s*([A-Za-z]+)(\s+)*([A-Za-z]*)")
+    # Try name in LAST, FIRST MIDDLE
+    name_regex = re.compile(r"([A-Za-z]+),\s*([A-Za-z]+)\s+([A-Za-z]*)")
 
-    try:
-        val_name = re.match(name_regex, value)
+    if val_name := re.match(name_regex, value):
+        try:
+            return [val_name.group(1).lower().capitalize(),
+                    val_name.group(2).lower().capitalize(),
+                    val_name.group(3).lower().capitalize()]
 
-        return [val_name.group(1).capitalize(), val_name.group(2).capitalize(), val_name.group(4).capitalize()]
+        except AttributeError as err:
+            return err
 
-    except AttributeError as err:
-        return err
+    # Try name in FIRST MIDDLE LAST
+    else:
+        name_regex = re.compile(r"([A-Za-z]+)\s+([A-Za-z]*)\s+([A-Za-z]+)")
+
+        if val_name := re.match(name_regex, value):
+            try:
+                return [val_name.group(3).lower().capitalize(),
+                        val_name.group(1).lower().capitalize(),
+                        val_name.group(2).lower().capitalize()]
+
+            except AttributeError as err:
+                return err
 
 
 def valid_address(value):
@@ -126,6 +141,9 @@ def valid_address(value):
         # Prepare coordinate details
         coord_details = response.json()["results"][0]["geometry"]["location"]
 
+        # Pull address details
+        address = response.json()["results"][0]["formatted_address"]
+
         # Extract zip code and building info from response
         zip_code = None
         building = None
@@ -137,12 +155,18 @@ def valid_address(value):
             if "premise" in component["types"]:
                 building = component["long_name"]
 
+        # Extract plus_code or set to None if missing
+        try:
+            plus_code = response.json()["results"][0]["plus_code"]["global_code"]
+        except KeyError:
+            plus_code = address
+
         # Populate address dictionary
         address = {
-            "address": response.json()["results"][0]["formatted_address"],
+            "address": address,
             "zip_code": zip_code,
             "building": building,
-            "plus_code": response.json()["results"][0]["plus_code"]["global_code"],
+            "plus_code": plus_code,
             "coord": (coord_details["lat"], coord_details["lng"])
         }
 
@@ -158,7 +182,7 @@ def valid_time(value):
     :return: time if the time is valid, else None
     """
     try:
-        time = datetime.strptime(value, "%H%M").time()
+        time = datetime.strptime(str(value), "%H%M").time()
         return time
 
     except ValueError as err:

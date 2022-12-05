@@ -15,20 +15,22 @@ class Visit:
     _c_sched_status = ("unassigned", "assigned", "no show", "cancelled")
     _c_cancel_reason = ("clinician unavailable", "patient unavailable", "no longer needed", "expired", "system action")
 
-    def __init__(self, pat_id, status=1, address="", sched_status="unscheduled", time_earliest="", time_latest="", exp_date=""):
+    def __init__(self, pat_id, status=1, sched_status="unscheduled", time_earliest="", time_latest="", exp_date="", **kwargs):
         """Initializes a new request and links with pat_id. It contains the following attributes:
             req_id, pat_id, name, status, the earliest time, latest time, sched status, and cancel_reason"""
         self._id = next(self._id_iter)
         self._pat_id = pat_id
         self._clin_id = None
-        self._address = address
         self._name = "Visit" + str(self._id)
-        self._status = status
-        self._time_earliest = time_earliest
-        self._time_latest = time_latest
-        self._exp_date = exp_date
+        self.status = status
+        self.time_earliest = time_earliest
+        self.time_latest = time_latest
+        self.exp_date = exp_date
         self._cancel_reason = None
         self._sched_status = sched_status
+
+        # Update all attributes from passed dict if provided
+        self.__dict__.update(kwargs)
 
     @property
     def id(self):

@@ -3,6 +3,8 @@ import pickle
 import pathlib
 import validate
 import classes
+import pandas as pd
+import time
 
 
 def write_obj(obj):
@@ -88,7 +90,7 @@ def load_obj(cls, file_path, inc_inac=0):
         # print(f"{cls.__qualname__} successfully loaded.")
         return obj
 
-    except FileNotFoundError:
+    except (FileNotFoundError, OSError):
         print(f"\n{cls.__qualname__} could not be found.")
 
 
@@ -129,5 +131,115 @@ def load_tracked_obj(cls):
 
             # next(cls._id_iter)
 
-    except FileNotFoundError:
+    except (FileNotFoundError, OSError):
         print(f"{cls.__qualname__} could not be found.")
+
+
+def generate_flat_file(cls):
+    """
+    Generates a flat file for import. User can populate and import using read_csv()
+    :param cls: Class to generate flat file
+    :return: 1 if successful
+    """
+    # Get a list of params in the __init__ definition
+    params = cls.__init__.__code__.co_varnames
+
+    # Create a pandas dataframe with just column headings (remove init_dict) and save to csv
+    flat_file = pd.DataFrame(columns=params)
+    flat_file = flat_file.drop(["self", "kwargs"], axis=1)
+
+    while True:
+        try:
+            filepath = validate.qu_input("Enter a file location to export the .csv to: ")
+
+            if not filepath:
+                return 0
+
+            flat_file.to_csv(filepath)
+            print("Export successful.")
+            time.sleep(2)
+
+            return 1
+
+        except (FileNotFoundError, OSError):
+            print("File not found. Ensure the input file contains '.csv' at the end.")
+
+
+def export_csv(cls):
+    """
+    Generates a flat file for import. User can populate and import using read_csv()
+    :param cls: Class to generate flat file
+    :return: 1 if successful
+    """
+    # Get a list of params in the __init__ definition, and remove self and kwargs
+    params = cls.__init__.__code__.co_varnames[1:-1]
+
+    # Initialize a blank list of objects to write, then populate with user's requested objects
+    obj_data = []
+    while True:
+        obj = get_obj(cls)
+
+        if not obj:
+            break
+
+        # Create a dict for each object, then append to list
+        val_obj_dict = {param: obj.__getattribute__(param) for param in params}
+        obj_data.append(val_obj_dict)
+
+    if not obj_data:
+        return 0
+
+    # Create a pandas dataframe with column headings, then populate with data from list above
+    data_export = pd.DataFrame(data=obj_data, columns=params)
+
+
+    # Write to file
+    while True:
+        try:
+            filepath = validate.qu_input("Enter a file location to export the .csv to: ")
+
+            if not filepath:
+                return 0
+
+            data_export.to_csv(filepath)
+            print("Export successful.")
+            time.sleep(2)
+
+            return 1
+
+        except (FileNotFoundError, OSError):
+            print("File not found. Ensure the input file contains '.csv' at the end.")
+
+
+def import_csv(cls):
+    """
+    Reads a file from csv and saves them as objects.
+    :param cls: Class of object(s) to be created.
+    :param filepath: Filepath of CSV file
+    :return: 1 if successful
+    """
+    # TODO: Make sure this matches on ID before it imports
+    while True:
+        try:
+            filepath = validate.qu_input("Enter a csv file location to load the file: ")
+
+            if not filepath:
+                return 0
+
+            import_data = pd.read_csv(filepath)
+            data_dict_list = import_data.to_dict("records")
+
+            # Loop through each dict from the import and initialize + save a new object
+            for data in data_dict_list:
+                obj = cls(**data)
+                obj.write_self()
+
+            print("Import successful.")
+            time.sleep(2)
+
+            return 1
+
+        except (FileNotFoundError, OSError):
+            print("File not found. Ensure the input file contains '.csv' at the end.")
+
+
