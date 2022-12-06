@@ -9,6 +9,7 @@ import requests
 from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 import googlemaps
+from time import sleep
 
 
 def optimize_trip(clin_id=""):
@@ -38,36 +39,48 @@ def optimize_trip(clin_id=""):
         if not inp_date:
             return 0
 
-        val_date = validate.valid_date(inp_date)
+        try:
+            val_date = validate.valid_date(inp_date).date().strftime("%d/%m/%Y")
+
+        except AttributeError:
+            print("Invalid date format.")
+            continue
 
         if val_date:
             break
 
+    try:
+        visits_by_date = clin.visits[val_date]
+
+    except KeyError:
+        print("There are no visits assigned on this date. Returning...")
+        sleep(1.5)
+        return 0
+
     # Create a list of visits by loading all visits attached to the clinician only if they are scheduled for input date.
-    visits = [in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl") for visit_id in
-              clin.visits['val_date']]
+    visits = [in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl") for visit_id in visits_by_date]
 
     # Distill visits into list of place_ids and add the clinician's start and end address
-    plus_code_list = clin.start_plus_code + [visit.plus_code for visit in visits] + clin.end_plus_code
+    plus_code_list = [clin.start_plus_code] + [visit.plus_code for visit in visits] + [clin.end_plus_code]
 
     # Generate distance matrix
     dist_matrix = create_dist_matrix(plus_code_list)
 
     # Calculate optimal route - this returns a list of lists per clinician, so can safely assume we want index 0
-    manager, routing, solution = route_optimizer(dist_matrix, num_clinicians=1, start_list=0, end_list=(len(dist_matrix) - 1))
+    manager, routing, solution = route_optimizer(dist_matrix, num_clinicians=1, start_list=[0], end_list=[len(dist_matrix)-1])
 
-    print_solution(1, clin, visits, 1, manager, routing, solution)
-    route_order = return_solution(1, manager, routing, solution)
+    print_solution(0, clin, visits, 1, manager, routing, solution)
+    route_order = return_solution(0, manager, routing, solution)
 
-    # Resequence clinician visits for future use, but cut off start and end address.
-    clin.visits[val_date] = [clin.visits[val_date][i].id for i in route_order[1:-1]]
+    # Resequence clinician visits for future use, but cut off start and end address and subtract 1 from counter.
+    clin.visits[val_date] = [visits[i-1].id for i in route_order[1:-1]]
     clin.write_self()
 
-    # Save route as coordinates. JavaScript API only works using coordinates
-    ordered_route_coords = [visits[i].coord for i in route_order]
+    # # Save route as coordinates. JavaScript API only works using coordinates
+    # ordered_route_coords = [clin.start_coord] + [visits[i-1].coord for i in route_order[1:-1]] + [clin.end_coord]
 
-    # Plot coords on map
-    map_features(route=ordered_route_coords)
+    # # Plot coords on map
+    # map_features(route=ordered_route_coords)
 
     # TODO: Add constraints for start and end time
 
@@ -89,6 +102,15 @@ def optimize_team(team_id=""):
         print("Please select a team for which you would like to optimize all clinician routes.")
         team = classes.team.Team.load_self()
 
+    if not team:
+        return 0
+
+    # Cancel if team is empty
+    if not team.pat_load:
+        print("This team does not have any patients associated with it. Exiting...")
+        sleep(1.5)
+        return 0
+
     pats = [in_out.load_obj(classes.person.Patient, f"./data/Patient/{pat_id}.pkl") for pat_id in team._pat_id]
 
     # Prompt user for date for optimization and validate format
@@ -98,16 +120,29 @@ def optimize_team(team_id=""):
         if not inp_date:
             return 0
 
-        val_date = validate.valid_date(inp_date)
+        try:
+            val_date = validate.valid_date(inp_date).date().strftime("%d/%m/%Y")
+
+        except AttributeError:
+            print("Invalid date format.")
+            continue
 
         if val_date:
             break
 
     # Grab all visits across all patients in team, then unpack for single list of team visits
-    team_visits = [
-        in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
-        for pat in pats for visit_id in pat.visits[val_date]
-        ]
+    team_visits = []
+
+    for pat in pats:
+        # Handle key errors for patients who do not have visits on the designated day
+        try:
+            visits = pat.visits[val_date]
+        except KeyError:
+            continue
+
+        for visit_id in visits:
+            visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
+            team_visits.append(visit)
 
     team_plus_codes = [visit.plus_code for visit in team_visits]
 
@@ -124,7 +159,7 @@ def optimize_team(team_id=""):
 
     # Pass through start and end list (last N indices of plus code list) as indices of distance matrix
     start_indices = [num for num in range(len(start_list))]
-    end_indices = [num for num in range(len(plus_code_list[-len(end_list):]))]
+    end_indices = [num for num in range(len(start_list) + len(team_plus_codes), len(plus_code_list))]
 
     # Optimize routes
     manager, routing, solution = route_optimizer(dist_matrix, team.team_size, start_indices, end_indices)
@@ -135,15 +170,11 @@ def optimize_team(team_id=""):
         route_order = return_solution(i, manager, routing, solution)
         # Remove the start and end locations of each address and subtract length of start index list from each index
         clin_visits = [team_visits[index-len(start_list)] for index in route_order[1:-1]]
-        clin.visits[val_date] = [visit.id for visit in clin_visits]
 
-        # Assign clinician to visit and save
+        # Assign clinician to visit (which assigns the visit to the clinician as well) and save
         for visit in clin_visits:
-            visit._clin_id = clin.id
+            visit.clin_id = clin.id
             visit.write_self()
-
-        # Save clinician
-        clin.write_self()
 
     # TODO: Add constraints for already assigned visits
     # TODO: Make sure this assigns the visits to clinicians
@@ -246,10 +277,10 @@ def create_dist_matrix(plus_code_list):
         if not response:
             return 0
 
-        distance_matrix[i * rows_per_send: (i + 1) * rows_per_send] = build_dist_matrix(response)
+        distance_matrix[i * rows_per_send: (i + 1) * rows_per_send] = build_dist_matrix(response.json())
 
     # Send remaining rows
-    for i in range(remaining_rows):
+    if remaining_rows > 0:
         origin_addresses = plus_code_list[rows_per_send * num_queries: rows_per_send * num_queries + remaining_rows]
 
         # Prepare URL for GET request
@@ -264,8 +295,7 @@ def create_dist_matrix(plus_code_list):
         if not response:
             return 0
 
-        distance_matrix[rows_per_send * num_queries: rows_per_send * num_queries + remaining_rows] = build_dist_matrix(
-            response)
+        distance_matrix[rows_per_send * num_queries: rows_per_send * num_queries + remaining_rows] = build_dist_matrix(response.json())
 
     return distance_matrix
 
@@ -327,7 +357,7 @@ def print_solution(clin_index,  clin, visits, n_start_list, manager, routing, so
     route_time = 0
 
     # Start routing but output
-    plan_output += f'  {clin.start_address} ->'
+    plan_output += f'  Start ->'
     previous_index = index
     index = solution.Value(routing.NextVar(index))
     route_time += routing.GetArcCostForVehicle(previous_index, index, 0)
@@ -341,8 +371,8 @@ def print_solution(clin_index,  clin, visits, n_start_list, manager, routing, so
         route_time += routing.GetArcCostForVehicle(previous_index, index, 0)
 
     # Add final index
-    plan_output += f' {clin.end_address}'
-    plan_output += f'Route distance: {route_time} minutes.'
+    plan_output += f' Return'
+    plan_output += f'\nRoute distance: {route_time} minutes.'
 
     print(plan_output)
 

@@ -1,5 +1,6 @@
 # This file contains functions to be used in the creating the GUI.
 # Stick with TUI for now, but launch completed map into web-browser or GUI
+import in_out
 import validate
 import geolocation
 import os
@@ -29,26 +30,21 @@ def main_menu(class_list):
               "    1) Geolocation Features\n"
               "    2) Create/Modify Records\n")
 
-        try:
+        selection = validate.qu_input("Selection: ")
 
-            selection = validate.qu_input("Selection: ")
+        if not selection:
+            return 0
 
-            if not selection:
-                return 0
+        elif selection == "1":
+            geo_feat()
+            continue
 
-            elif selection == "1":
-                geo_feat()
-                continue
+        elif selection == "2":
+            obj_menu(class_list)
+            continue
 
-            elif selection == "2":
-                obj_menu(class_list)
-                continue
-
-            else:
-                print("Invalid selection.")
-
-        except TypeError:
-            print("Please select an option by number from the list above.\n")
+        else:
+            print("Invalid selection.")
 
 
 def obj_menu(class_list):
@@ -69,20 +65,31 @@ def obj_menu(class_list):
             return 0
 
         while True:
-            # Prompt user for object details and load object
-            obj = cls.load_self()
+            clear()
+            print("Please select an option below:\n"
+                  "     1) Find Record\n"
+                  "     2) Create New Record\n"
+                  "     3) Import/Export Record(s)\n")
 
-            # If object exists, send user to modification screen. If record inactivated, quit.
-            if obj:
-                if not obj.update_self():
-                    return 0
+            selection = validate.qu_input("Selection: ")
 
-            # If object does not exist, prompt user to create object as appropriate based on class.
-            else:
-                create_object_director(cls)
-
-            if not validate.yes_or_no("Search for another object? "):
+            if not selection:
                 break
+
+            if selection == "1":
+                obj_selection(cls)
+                continue
+
+            elif selection == "2":
+                create_object_director(cls)
+                continue
+
+            elif selection == "3":
+                import_export_menu(cls)
+                continue
+
+            else:
+                print("Invalid Selection.")
 
 
 def class_selection(class_list):
@@ -98,7 +105,7 @@ def class_selection(class_list):
     validate.print_cat_value(selection_list, prompt)
 
     while True:
-        selection = validate.qu_input("Selection: ")
+        selection = validate.qu_input("\nSelection: ")
 
         if not selection:
             return 0
@@ -110,6 +117,31 @@ def class_selection(class_list):
         cls = class_list[selection_list.index(selection)]
 
         return cls
+
+
+def obj_selection(cls):
+    """
+    Prompts user for a class to enter, then asks for an object name or ID.
+    If it exists, moves them to the modify or inactivate function.
+    If it does not, prompts them to create a new object.
+    :param class_list: List of classes. Inherited from main function
+    :return: None
+    """
+    while True:
+        # Prompt user for object details and load object
+        obj = cls.load_self()
+
+        # If object exists, send user to modification screen. If record inactivated, quit.
+        if obj:
+            if not obj.update_self():
+                return 0
+
+        # If object does not exist, prompt user to create object as appropriate based on class.
+        else:
+            create_object_director(cls)
+
+        if not validate.yes_or_no("Search for another object? "):
+            break
 
 
 def create_object_director(cls):
@@ -126,6 +158,41 @@ def create_object_director(cls):
     if cont:
         obj = cls.create_self()
         return obj
+
+
+def import_export_menu(cls):
+    """
+    Menu containing different import/export options.
+    :param cls: Class for import/export
+    :return: None
+    """
+    while True:
+        clear()
+
+        print("Please select an option from the list below:\n"
+              "    1) Create Flat File\n"
+              "    2) Export Records\n"
+              "    3) Import Records\n")
+
+        selection = validate.qu_input("Selection: ")
+
+        if not selection:
+            return 0
+
+        elif selection == "1":
+            in_out.generate_flat_file(cls)
+            continue
+
+        elif selection == "2":
+            in_out.export_csv(cls)
+            continue
+
+        elif selection == "3":
+            in_out.import_csv(cls)
+            continue
+
+        else:
+            print("Invalid selection.")
 
 
 def geo_feat():

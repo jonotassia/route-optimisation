@@ -10,15 +10,18 @@ class Team:
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
     _tracked_instances = {}
 
-    def __init__(self, status=1, name=None, address=None):
+    def __init__(self, status=1, name=None, address=None, **kwargs):
         """Initializes a new request and links with pat_id. It contains the following attributes:
             req_id, pat_id, name, status, address, the earliest time, latest time, sched status, and cancel_reason"""
         self._id = next(self._id_iter)
         self._name = name
-        self._status = status
+        self.status = status
         self._pat_id = []
         self._clin_id = []
         self.address = address
+
+        # Update all attributes from passed dict if provided
+        self.__dict__.update(kwargs)
 
     @property
     def id(self):
