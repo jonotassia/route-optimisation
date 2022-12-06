@@ -53,7 +53,7 @@ def valid_date(value):
 def valid_name(value):
     """Gathers name information. Returns first name, middle name, and last name"""
     # Try name in LAST, FIRST MIDDLE
-    name_regex = re.compile(r"([A-Za-z]+),\s*([A-Za-z]+)\s+([A-Za-z]*)")
+    name_regex = re.compile(r"([A-Za-z]+),\s*([A-Za-z]+)\s*([A-Za-z]*)")
 
     if val_name := re.match(name_regex, value):
         try:
@@ -197,7 +197,7 @@ def print_cat_value(cat_list, prompt):
     # Display category values and prompt user for selection
     print(prompt)
     for x, cat in enumerate(cat_list):
-        print(f"    {x + 1}. {cat.capitalize()}")
+        print(f"    {x + 1}) {cat.capitalize()}")
 
 
 def valid_cat_list(value, cat_list):
@@ -330,19 +330,24 @@ def validate_obj_by_name(cls, name, inc_inac=0):
                 return dict_id
 
             elif lev_rat > 0.6:
-                match_list.append([dict_id, val['name'], val['dob'], val['sex']])
+                match_list.append([dict_id, val['name']])
 
     # Print list of potential matches for user to select from
     if not match_list:
         print("No records found matching those details.")
         return 0
 
-    for count, match in enumerate(match_list):
-        print(f"{count + 1}) ID: {match[0]}, "
-              f"Name: {match[1][0]}, {match[1][1]} {match[1][2]}, "
-              f"DOB: {match[2].strftime('%d/%m/%Y')}"
-              f"Sex: {match[3]}"
-              )
+    if issubclass(cls, classes.person.Human):
+        for count, match in enumerate(match_list):
+            print(f"{count + 1}) ID: {match[0]}, "
+                  f"Name: {match[1][0]}, {match[1][1]} {match[1][2]}, "
+                  f"DOB: {match[2].strftime('%d/%m/%Y')}"
+                  f"Sex: {match[3]}"
+                  )
+
+    else:
+        for count, match in enumerate(match_list):
+            print(f"{count + 1}) ID: {match[0]}, Name: {match[1]}")
 
     # Prompt user to select option from above
     while True:

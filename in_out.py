@@ -123,7 +123,7 @@ def load_tracked_obj(cls):
                     obj._instance_by_date[obj.exp_date].append(obj.id)
 
                 except KeyError:
-                    obj._instance_by_date[obj._exp_date] = [obj.id]
+                    obj._instance_by_date[obj.exp_date] = [obj.id]
 
             else:
                 cls._tracked_instances[obj.id] = {"status": obj._status,

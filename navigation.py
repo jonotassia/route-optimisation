@@ -67,9 +67,9 @@ def obj_menu(class_list):
         while True:
             clear()
             print("Please select an option below:\n"
-                  "     1. Find Record\n"
-                  "     2. Create New Record\n"
-                  "     3. Import/Export Record(s)\n")
+                  "     1) Find Record\n"
+                  "     2) Create New Record\n"
+                  "     3) Import/Export Record(s)\n")
 
             selection = validate.qu_input("Selection: ")
 

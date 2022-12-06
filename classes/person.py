@@ -157,7 +157,48 @@ class Human:
         """
         ID of linked team.
         """
-        self._team_id = value
+        if value in classes.team.Team._tracked_instances:
+            old_team_id = self._team_id
+
+            # Inverse link team to person
+            team = in_out.load_obj(classes.team.Team, f"./data/Team/{value}.pkl")
+
+            if isinstance(self, Patient):
+                team._pat_id.append(self.id)
+
+                # Remove from old team
+                if old_team_id:
+                    old_team = in_out.load_obj(classes.team.Team, f"./data/Team/{old_team_id}.pkl")
+                    old_team._pat_id.remove(self.id)
+
+            if isinstance(self, Clinician):
+                team._clin_id.append(self.id)
+
+                # Remove from old team
+                if old_team_id:
+                    old_team = in_out.load_obj(classes.team.Team, f"./data/Team/{old_team_id}.pkl")
+                    old_team._clin_id.remove(self.id)
+                    old_team.write_self()
+
+            team.write_self()
+
+            self._team_id = value
+
+        else:
+            raise ValueError("This is not a valid team ID.\n")
+
+    @team_id.deleter
+    def team_id(self):
+        # Load patient and create or add to the search by date list for visits
+        team = in_out.load_obj(classes.team.Team, f"./data/Team/{self.team_id}.pkl")
+
+        if isinstance(self, Patient):
+            team._pat_id.remove(self.id)
+
+        if isinstance(self, Clinician):
+            team._clin_id.remove(self.id)
+
+        team.write_self()
 
     @property
     def team_name(self):
@@ -166,6 +207,37 @@ class Human:
 
         else:
             return None
+
+    def assign_team(self):
+        """
+        Assigns the clinician or patient to a team so that they can be considered in that team's route calculation
+        """
+        # Allow user to select team either by name or id, then load to an object
+        print(f"Select a team to add to this {self.__class__.__name__}. Current: {self.team_name if self.team_name else 'None'}")
+
+        team = in_out.get_obj(classes.team.Team)
+
+        if not team:
+            sleep(1)
+            return 0
+
+        # Add team to placeholder. Only add to clinician when confirmed
+        team_id = team.id
+        team_name = team._name
+
+        detail_dict = {
+            "Team ID": team_id,
+            "Team Name": team_name
+        }
+
+        # If user does not confirm info, changes will be reverted.
+        if not validate.confirm_info(self, detail_dict):
+            self.refresh_self()
+            return 0
+
+        self.team_id = team_id
+        self.write_self()
+        return 1
 
     @classmethod
     def create_self(cls):
@@ -288,7 +360,7 @@ class Patient(Human):
 
     @property
     def death_date(self):
-        return self._death_date.strftime("%d/%m/%Y")
+        return self._death_date.date().strftime("%d/%m/%Y")
 
     @death_date.setter
     def death_date(self, value):
@@ -303,7 +375,7 @@ class Patient(Human):
 
     @property
     def death_time(self):
-        return self._death_time
+        return self._death_time.strftime("%H%M")
 
     @death_time.setter
     def death_time(self, value):
@@ -384,10 +456,23 @@ class Patient(Human):
             if not inp_date:
                 return 0
 
-            val_date = validate.valid_date(inp_date)
+            try:
+                val_date = validate.valid_date(inp_date).date().strftime("%d/%m/%Y")
+
+            except AttributeError:
+                print("Invalid date format.")
+                continue
 
             if val_date:
                 break
+
+        try:
+            visits_by_date = self.visits[val_date]
+
+        except KeyError:
+            print("There are no visits assigned on this date. Returning...")
+            sleep(1.5)
+            return 0
 
         if not self.visits:
             print("This patient does not have any linked visits.")
@@ -395,7 +480,7 @@ class Patient(Human):
             return 0
 
         # Display list of requests linked to patient.
-        for count, visit_id in enumerate(self.visits[val_date]):
+        for count, visit_id in enumerate(visits_by_date):
             visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
 
             print(f"{count + 1}) Visit ID: {visit.id}"
@@ -412,7 +497,7 @@ class Patient(Human):
                 return 0
 
             # Raise error if not in list
-            visit_id = validate.valid_cat_list(selection, self.visits[val_date])
+            visit_id = validate.valid_cat_list(selection, visits_by_date)
 
             if isinstance(visit_id, Exception):
                 print("Invalid selection.")
@@ -456,35 +541,6 @@ class Patient(Human):
         """Updates the patient's skill requirements and visit preferences"""
         # TODO: Define list of skills/preferences required for patient per instance. This should be inherited by visit.
         pass
-
-    def assign_team(self):
-        """
-        Assigns the patient to a team so that they can be considered in that team's route calculation
-        """
-        # Allow user to select team either by name or id, then load to an object
-        print(f"Select a team to add to this patient. Current: {self.team_name if self.team_name else 'None'}")
-        team = in_out.get_obj(classes.team.Team)
-
-        if not team:
-            return 0
-
-        # Add team to patient and add patient to team
-        self.team_id = team.id
-        team._pat_id.append(self.id)
-
-        detail_dict = {
-            "Team ID": self.team_id,
-            "Team Name": self.team_name
-        }
-
-        # If user does not confirm info, changes will be reverted.
-        if not validate.confirm_info(self, detail_dict):
-            self.refresh_self()
-            return 0
-
-        team.write_self()
-        self.write_self()
-        return 1
 
     def inactivate_self(self):
         """
@@ -703,7 +759,7 @@ class Clinician(Human):
 
     @property
     def start_time(self):
-        return self._start_time
+        return self._start_time.strftime("%H%M")
 
     @start_time.setter
     def start_time(self, value):
@@ -718,7 +774,7 @@ class Clinician(Human):
 
     @property
     def end_time(self):
-        return self._end_time
+        return self._end_time.strftime("%H%M")
 
     @end_time.setter
     def end_time(self, value):
@@ -793,21 +849,34 @@ class Clinician(Human):
             if not inp_date:
                 return 0
 
-            val_date = validate.valid_date(inp_date)
+            try:
+                val_date = validate.valid_date(inp_date).date().strftime("%d/%m/%Y")
+
+            except AttributeError:
+                print("Invalid date format.")
+                continue
 
             if val_date:
                 break
 
+        try:
+            visits_by_date = self.visits[val_date]
+
+        except KeyError:
+            print("There are no visits assigned on this date. Returning...")
+            sleep(1.5)
+            return 0
+
         # Initialize all visits and add to list for display
         visit_list = []
 
-        for index, visit_id in enumerate(self.visits[val_date]):
+        for index, visit_id in enumerate(visits_by_date):
             visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
 
             if not visit:
                 continue
 
-            print(f"{index}) ID: {visit.id}, Patient: {visit.patient_name}, Time Window: {visit.time_earliest} - {visit.time_latest}")
+            print(f"{index+1}) ID: {visit.id}, Patient: {visit.patient_name}, Time Window: {visit.time_earliest} - {visit.time_latest}")
             visit_list.append(visit_id)
 
         if not visit_list:
@@ -820,7 +889,7 @@ class Clinician(Human):
         if not selection:
             return 0
 
-        visit_id = validate.valid_cat_list(selection, self.visits)
+        visit_id = validate.valid_cat_list(selection, visits_by_date)
 
         if not visit_id or isinstance(visit_id, Exception):
             return 0
@@ -912,36 +981,6 @@ class Clinician(Human):
         :return: 1 if successful
         """
         pass
-
-    def assign_team(self):
-        """
-        Assigns the clinician to a team so that they can be considered in that team's route calculation
-        """
-        # Allow user to select team either by name or id, then load to an object
-        print(f"Select a team to add to this patient. Current: {self.team_name if self.team_name else 'None'}")
-
-        team = in_out.get_obj(classes.team.Team)
-
-        if not team:
-            return 0
-
-        # Add team to patient and add patient to team
-        self.team_id = team.id
-        team._clin_id.append(self.id)
-
-        detail_dict = {
-            "Team ID": self.team_id,
-            "Team Name": self.team_name
-        }
-
-        # If user does not confirm info, changes will be reverted.
-        if not validate.confirm_info(self, detail_dict):
-            self.refresh_self()
-            return 0
-
-        team.write_self()
-        self.write_self()
-        return 1
 
     def optimize_clinician_trip(self):
         """Calculates the estimated trip route for the clinician. Allows for overrides of start/end constraints"""
