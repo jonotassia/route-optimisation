@@ -9,6 +9,7 @@ import requests
 from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 import googlemaps
+import datetime
 from time import sleep
 
 
@@ -63,11 +64,18 @@ def optimize_trip(clin_id=""):
     # Distill visits into list of place_ids and add the clinician's start and end address
     plus_code_list = [clin.start_plus_code] + [visit.plus_code for visit in visits] + [clin.end_plus_code]
 
+    # Create time windows
+    time_windows = [(visit.time_earliest, visit.time_latest) for visit in visits]
+
     # Generate distance matrix
     dist_matrix = create_dist_matrix(plus_code_list)
 
     # Calculate optimal route - this returns a list of lists per clinician, so can safely assume we want index 0
-    manager, routing, solution = route_optimizer(dist_matrix, num_clinicians=1, start_list=[0], end_list=[len(dist_matrix)-1])
+    manager, routing, solution = route_optimizer(dist_matrix,
+                                                 num_clinicians=1,
+                                                 start_list=[0],
+                                                 end_list=[len(dist_matrix)-1],
+                                                 time_windows=time_windows)
 
     print_solution(0, clin, visits, 1, manager, routing, solution)
     route_order = return_solution(0, manager, routing, solution)
@@ -161,8 +169,21 @@ def optimize_team(team_id=""):
     start_indices = [num for num in range(len(start_list))]
     end_indices = [num for num in range(len(start_list) + len(team_plus_codes), len(plus_code_list))]
 
+    def convert_to_min(_time):
+        """
+        Takes a datetime object (time) and outputs a total in minutes
+        :param _time: Datetime object (time)
+        :return: Total time in minutes
+        """
+        return _time.hour*60 + _time.minute
+
+    # Create time windows - use private variable for access to datetime value
+    clin_window = [(convert_to_min(clin._start_time), convert_to_min(clin._end_time)) for clin in clins]
+    visit_window = [(convert_to_min(visit._time_earliest), convert_to_min(visit._time_latest)) for visit in team_visits]
+    time_windows = clin_window + visit_window
+
     # Optimize routes
-    manager, routing, solution = route_optimizer(dist_matrix, team.team_size, start_indices, end_indices)
+    manager, routing, solution = route_optimizer(dist_matrix, team.team_size, start_indices, end_indices, time_windows)
 
     # Create optimal route order and assign to each clinician
     for i, clin in enumerate(clins):
@@ -180,7 +201,7 @@ def optimize_team(team_id=""):
     # TODO: Make sure this assigns the visits to clinicians
 
 
-def route_optimizer(dist_matrix, num_clinicians, start_list, end_list):
+def route_optimizer(dist_matrix, num_clinicians, start_list, end_list, time_windows):
     """
     Passes locations through route optimizer to generate optimal route solution.
     :param dist_matrix:
@@ -207,6 +228,42 @@ def route_optimizer(dist_matrix, num_clinicians, start_list, end_list):
 
     # Create a callback index using the transit time callback nested function
     transit_callback_index = routing.RegisterTransitCallback(transit_callback)
+
+    # Add time window constraints https://developers.google.com/optimization/routing/vrptw
+    routing.AddDimension(
+        transit_callback_index,
+        1410,
+        1410,
+        False,
+        "Time"
+    )
+
+    time_dimension = routing.GetDimensionOrDie("Time")
+
+    # Add time window constraint for each location except depot. Start at num_clins to skip start locations
+    for location_index, window in enumerate(time_windows):
+        if location_index in range(num_clinicians):
+            continue
+        index = manager.NodeToIndex(location_index)
+        time_dimension.CumulVar(index).SetRange(window[0], window[1])
+
+    # Add time window constraints for each vehicle
+    for vehicle_id in range(num_clinicians):
+        # Set start time constraint for vehicle
+        start_index = routing.Start(vehicle_id)
+        time_dimension.CumulVar(start_index).SetRange(
+            time_windows[vehicle_id][0],
+            time_windows[vehicle_id][0]
+        )
+        # Set end time constraint for vehicle
+        end_index = routing.End(vehicle_id)
+        time_dimension.CumulVar(end_index).SetRange(
+            time_windows[vehicle_id][1],
+            time_windows[vehicle_id][1]
+        )
+        # Ensure time window considered in solution
+        routing.AddVariableMinimizedByFinalizer(time_dimension.CumulVar(routing.Start(vehicle_id)))
+        routing.AddVariableMaximizedByFinalizer(time_dimension.CumulVar(routing.End(vehicle_id)))
 
     # Enable the routing function to use this transit time as its arc cost measurement
     routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
@@ -330,7 +387,7 @@ def build_dist_matrix(response):
 
     for row in response['rows']:
         # Loop through each element in the rows of the response and populate a list of each value
-        row_list = [int(row['elements'][i]['duration']['value']) for i in range(len(row["elements"]))]
+        row_list = [int(row['elements'][i]['duration']['value']/60) for i in range(len(row["elements"]))]
 
         # Add row list to the array
         distance_matrix.append(row_list)
@@ -352,11 +409,15 @@ def print_solution(clin_index,  clin, visits, n_start_list, manager, routing, so
     """
     print(f"Objective: {solution.ObjectiveValue()} minutes.")
 
+    # Get time dimension
+    time_dimension = routing.GetDimensionOrDie('Time')
+
+    # Start routing for clinician
     index = routing.Start(clin_index)
     plan_output = f"Optimal route for {clin.name}: \n"
     route_time = 0
 
-    # Start routing but output
+    # Start routing output
     plan_output += f'  Start ->'
     previous_index = index
     index = solution.Value(routing.NextVar(index))
@@ -365,14 +426,19 @@ def print_solution(clin_index,  clin, visits, n_start_list, manager, routing, so
     # Add each index to plan_output
     while not routing.IsEnd(index):
         # Subtract number of items in start list from node to match with visits in visit list
-        plan_output += f'  {visits[manager.IndexToNode(index)-n_start_list].patient_name} ->'
-        previous_index = index
+        visit = visits[manager.IndexToNode(index)-n_start_list]
+        # Get time window for each location
+        time_var = time_dimension.CumulVar(index)
+        leave_by = datetime.timedelta(minutes=solution.Max(time_var))
+        plan_output += f'  {visit.patient_name} ' \
+                       f'(Start by: {visit.start_time}, ' \
+                       f'Leave by: {leave_by}) ->'
         index = solution.Value(routing.NextVar(index))
-        route_time += routing.GetArcCostForVehicle(previous_index, index, 0)
 
     # Add final index
+    time_var = time_dimension.CumulVar(index)
     plan_output += f' Return'
-    plan_output += f'\nRoute distance: {route_time} minutes.'
+    plan_output += f'\nRoute Time: {solution.Min(time_var)/60} minutes.'
 
     print(plan_output)
 

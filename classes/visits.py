@@ -70,15 +70,14 @@ class Visit:
             pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{value}.pkl")
 
             # Add visit to patient if not already listed
-            if self.id not in pat.visits[self.exp_date]:
-                try:
+            try:
+                if self.id not in pat.visits[self.exp_date]:
                     pat.visits[self.exp_date].append(self.id)
 
-                except KeyError:
-                    pat.visits[self.exp_date] = [self.id]
+            except KeyError:
+                pat.visits[self.exp_date] = [self.id]
 
-                pat.write_self()
-
+            pat.write_self()
             self._pat_id = value
 
         else:
@@ -126,15 +125,15 @@ class Visit:
 
             clin = in_out.load_obj(classes.person.Patient, f"./data/Clinician/{value}.pkl")
 
-            # If the visit is not already assigned to the visit, assign it
-            if self.id not in clin.visits[self.exp_date]:
-                try:
+            # If the visit is not already assigned to the clinician, assign it
+            try:
+                if self.id not in clin.visits[self.exp_date]:
                     clin.visits[self.exp_date].append(self.id)
 
-                except KeyError:
-                    clin.visits[self.exp_date] = [self.id]
+            except KeyError:
+                clin.visits[self.exp_date] = [self.id]
 
-                clin.write_self()
+            clin.write_self()
 
             # Remove from old clinician if there is one
             if old_clin_id:
@@ -219,6 +218,39 @@ class Visit:
             raise ValueError("Date cannot be before today.\n")
 
         else:
+            # Handle date changes if reimporting an existing visit by grabbing the old visit date from instance list
+            old_visit_date = ""
+            try:
+                old_visit_date = Visit._tracked_instances[self.id]["date"]
+
+            except KeyError:
+                pass
+
+            if old_visit_date:
+                try:
+                    self._instance_by_date[old_visit_date].remove(self.id)
+
+                except KeyError:
+                    pass
+
+                try:
+                    pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self.pat_id}.pkl")
+                    if pat:
+                        pat.visits[old_visit_date].remove(self.id)
+                        pat.write_self()
+
+                except KeyError:
+                    pass
+
+                try:
+                    clin = in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{self.clin_id}.pkl")
+                    if clin:
+                        clin.visits[old_visit_date].remove(self.id)
+                        clin.write_self()
+
+                except KeyError:
+                    pass
+
             self._exp_date = date
 
     @property
