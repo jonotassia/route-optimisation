@@ -12,10 +12,16 @@ class Visit:
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
     _tracked_instances = {}
     _instance_by_date = {}
+    _c_visit_complexity = ("complex", "routine", "simple")
+    _c_visit_priority = ("green", "amber", "red")
+    _c_skill_list = classes.person.Clinician._c_skill_list
+    _c_discipline = classes.person.Clinician._c_discipline
     _c_sched_status = ("unassigned", "assigned", "no show", "cancelled")
     _c_cancel_reason = ("clinician unavailable", "patient unavailable", "no longer needed", "expired", "system action")
 
-    def __init__(self, pat_id, status=1, sched_status="unscheduled", time_earliest="", time_latest="", exp_date="", **kwargs):
+    def __init__(self, pat_id, status=1, sched_status="unscheduled", time_earliest="", time_latest="",
+                 exp_date="", visit_complexity=_c_visit_complexity[1], visit_priority=_c_visit_priority[0],
+                 skill_list=[], discipline="", **kwargs):
         """Initializes a new request and links with pat_id. It contains the following attributes:
             req_id, pat_id, name, status, the earliest time, latest time, sched status, and cancel_reason"""
         self._id = next(self._id_iter)
@@ -26,6 +32,10 @@ class Visit:
         self.status = status
         self.time_earliest = time_earliest
         self.time_latest = time_latest
+        self.visit_priority = visit_priority
+        self.visit_complexity = visit_complexity
+        self.skill_list = skill_list
+        self.discipline = discipline
         self._cancel_reason = None
         self._sched_status = sched_status
 
@@ -293,6 +303,91 @@ class Visit:
             raise ValueError("Please enter a valid time in the format HHMM.\n")
 
     @property
+    def visit_complexity(self):
+        try:
+            return self._visit_complexity.capitalize()
+
+        except AttributeError:
+            return None
+
+    @visit_complexity.setter
+    def visit_complexity(self, value):
+        complexity = validate.valid_cat_list(value, self._c_visit_complexity)
+
+        if complexity:
+            self._visit_complexity = complexity
+
+        else:
+            raise ValueError(f"{value.capitalize()} is not a valid visit complexity.")
+
+    @property
+    def visit_priority(self):
+        try:
+            return self._visit_priority.capitalize()
+
+        except AttributeError:
+            return None
+
+    @visit_priority.setter
+    def visit_priority(self, value):
+        priority = validate.valid_cat_list(value, self._c_visit_priority)
+
+        if priority:
+            self._visit_priority = priority
+
+        else:
+            raise ValueError(f"{value.capitalize()} is not a valid visit priority.")
+
+    @property
+    def skill_list(self):
+        try:
+            return ", ".join(self._skill_list).capitalize()
+
+        except TypeError:
+            return None
+
+    @skill_list.setter
+    def skill_list(self, value: list):
+        if not value:
+            self._skill_list = None
+
+        else:
+            skill_list = []
+
+            for skill in value:
+                skill = validate.valid_cat_list(skill, self._c_skill_list)
+
+                if skill:
+                    skill_list.append(skill)
+
+                else:
+                    raise ValueError(f"{skill.capitalize()} is not a valid skill.")
+
+            self._skill_list = skill_list
+
+    @property
+    def discipline(self):
+        try:
+            return self._discipline.capitalize()
+
+        except AttributeError:
+            return "Any"
+
+    @discipline.setter
+    def discipline(self, value):
+        if not value:
+            self._discipline = None
+
+        else:
+            discipline = validate.valid_cat_list(value, self._c_discipline)
+
+            if discipline:
+                self._discipline = discipline
+
+            else:
+                raise ValueError(f"{value.capitalize()} is not a valid discipline.")
+
+    @property
     def cancel_reason(self):
         return self._cancel_reason
 
@@ -332,7 +427,10 @@ class Visit:
             selection = validate.qu_input("What would you like to do:\n"
                                           "     1. Modify Visit Date and Time\n"
                                           "     2. Assign Visit\n"
-                                          "     3. Inactivate Record\n"
+                                          "     3. Modify Skills\n"
+                                          "     4. Modify Discipline\n"
+                                          "     5. Modify Priority and Complexity\n"
+                                          "     6. Inactivate Record\n"
                                           "\n"
                                           "Selection: ")
 
@@ -347,6 +445,15 @@ class Visit:
                 self.manual_assign_visit()
 
             elif selection == "3":
+                self.modify_skills()
+
+            elif selection == "4":
+                self.modify_discipline()
+
+            elif selection == "5":
+                self.modify_priority_complexity()
+
+            elif selection == "6":
                 self.inactivate_self()
                 return 0
 
@@ -503,10 +610,111 @@ class Visit:
 
         print("\n")
 
+    def modify_skills(self):
+        """
+        Updates visit skill requirements list based on clinical registration. Used for validation to drive scheduling for
+        patients based on their needs.
+        :return: 1 if successful
+        """
+
+        attr_list = [
+            {
+                "term": f"Skill Requirement. Previous: {self.skill_list if self.skill_list else 'None'}",
+                "attr": "skill_list",
+                "cat_list": self._c_skill_list,
+                "multiselect": True
+            }
+        ]
+
+        # Update all attributes from above. Quit if user quits during any attribute
+        if not validate.get_info(self, attr_list):
+            self.refresh_self()
+            return 0
+
+        detail_dict = {
+            "Skill Requirements": self.skill_list,
+        }
+
+        # If user does not confirm info, changes will be reverted.
+        if not validate.confirm_info(self, detail_dict):
+            self.refresh_self()
+            return 0
+
+        self.write_self()
+        return 1
+
     def write_self(self):
         """Writes the object to file as a .pkl using the pickle module"""
         if in_out.write_obj(self):
             return 1
+
+    def modify_discipline(self):
+        """
+        Updates clinician discipline.
+        :return: 1 if successful
+        """
+        attr_list = [
+            {
+                "term": f"Discipline. Previous: {self.discipline if self.discipline else 'None'}",
+                "attr": "discipline",
+                "cat_list": self._c_discipline
+            },
+        ]
+
+        # Update all attributes from above. Quit if user quits during any attribute
+        if not validate.get_info(self, attr_list):
+            self.refresh_self()
+            return 0
+
+        detail_dict = {
+            "Discipline": self.discipline,
+        }
+
+        # If user does not confirm info, changes will be reverted.
+        if not validate.confirm_info(self, detail_dict):
+            self.refresh_self()
+            return 0
+
+        self.write_self()
+        return 1
+
+    def modify_priority_complexity(self):
+        """
+        Updates priority and complexity of a visit. Writes updates to file.
+        :return: 1 if successful.
+        """
+        attr_list = [
+            {
+                "term": f"Priority. Previous: {self.visit_priority if self.visit_priority else 'None'}",
+                "attr": "visit_priority",
+                "cat_list": self._c_visit_priority
+            },
+            {
+                "term": f"Complexity. Previous: {self.visit_complexity if self.visit_complexity else 'None'}",
+                "attr": "visit_complexity",
+                "cat_list": self._c_visit_complexity
+            }
+        ]
+
+        # Update all attributes from above. Quit if user quits during any attribute
+        if not validate.get_info(self, attr_list):
+            self.refresh_self()
+            return 0
+
+        detail_dict = {
+            "Visit Priority": self.visit_priority,
+            "Visit Complexity": self.visit_complexity
+        }
+
+        # If user does not confirm info, changes will be reverted.
+        if not validate.confirm_info(self, detail_dict):
+            self.refresh_self()
+            return 0
+
+        # Save and update instance lists
+        self.write_self()
+
+        return 1
 
     @classmethod
     def create_self(cls, pat_id=""):
