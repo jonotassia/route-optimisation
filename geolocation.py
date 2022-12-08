@@ -73,6 +73,11 @@ def optimize_trip(clin_id=""):
                                                  data_dict["capacities"], data_dict["weights"],
                                                  data_dict["priorities"])
 
+    if not solution:
+        print("No solution found. Returning...")
+        sleep(2)
+        return 0
+
     print_solution(0, clin, visits, 1, manager, routing, solution)
     route_order = return_solution(0, manager, routing, solution)
 
@@ -162,8 +167,24 @@ def optimize_team(team_id=""):
                                                  data_dict["capacities"], data_dict["weights"],
                                                  data_dict["priorities"])
 
+    if not solution:
+        print("No solution found. Returning...")
+        sleep(2)
+        return 0
+
     # Create optimal route order and assign to each clinician
     for i, clin in enumerate(clins):
+        # Assign and print all nodes that could not be visited
+        dropped_nodes = (node for node in range(routing.Size())
+                         if solution.Value(routing.NextVar(node)) == node
+                         and not routing.IsStart(node)
+                         and not routing.IsEnd(node))
+        print(f"The following patients could not be seen: ")
+        for node in dropped_nodes:
+            print(f"{node}) {team_visits[node].patient_name}: {team_visits[node].time_earliest} - {team_visits[node].time_latest}\n"
+                  f"    Priority: {team_visits[node].visit_priority}, Complexity: {team_visits[node].visit_complexity}")
+
+        # Print and assign route by clinician
         print_solution(i, clin, team_visits, len(data_dict["start_list"]), manager, routing, solution)
         route_order = return_solution(i, manager, routing, solution)
 
@@ -174,6 +195,8 @@ def optimize_team(team_id=""):
         for visit in clin_visits:
             visit.clin_id = clin.id
             visit.write_self()
+
+    return 1
 
     # TODO: Add constraints for already assigned visits
 
@@ -221,10 +244,13 @@ def generate_data(visits, clins):
     capacities = [clin.capacity for clin in clins]
 
     # Get weight information, which is numerically represented as complexity index plus 1 for each visit
-    weights = [visit._c_visit_complexity.index(visit._visit_complexity)+1 for visit in visits]
+    visit_weights = [visit._c_visit_complexity.index(visit._visit_complexity)+1 for visit in visits]
+    weights = [0] * len(start_list) + visit_weights + [0] * len(end_list)
 
-    # Get priority information, which is numerically represented as priority index plus 1 for each visit
-    priorities = [visit._c_visit_priority.index(visit._visit_priority)+1 for visit in visits]
+    # Get priority information, which is numerically represented as priority index ^4 in order to significantly
+    # punish for missing a "Red" visit
+    visit_priorities = [(visit._c_visit_priority.index(visit._visit_priority)+1)**4 for visit in visits]
+    priorities = [0] * len(start_list) + visit_priorities + [0] * len(end_list)
 
     data_dict = {
         "plus_code_list": plus_code_list,
@@ -292,18 +318,12 @@ def route_optimizer(dist_matrix, num_clinicians, start_list, end_list,
 
     # Add time window constraints for each vehicle
     for vehicle_id in range(num_clinicians):
-        # Set start time constraint for vehicle
+        # Set start time constraint for vehicle (Routing always starts at their start time)
         start_index = routing.Start(vehicle_id)
-        time_dimension.CumulVar(start_index).SetRange(
-            time_windows[vehicle_id][0],
-            time_windows[vehicle_id][0]
-        )
-        # Set end time constraint for vehicle
+        time_dimension.CumulVar(start_index).SetRange(time_windows[vehicle_id][0], time_windows[vehicle_id][0])
+        # Set end time constraint for vehicle (Routing finishes anywhere between start time and end time)
         end_index = routing.End(vehicle_id)
-        time_dimension.CumulVar(end_index).SetRange(
-            time_windows[vehicle_id][1],
-            time_windows[vehicle_id][1]
-        )
+        time_dimension.CumulVar(end_index).SetRange(time_windows[vehicle_id][0], time_windows[vehicle_id][1])
         # Ensure time window considered in solution
         routing.AddVariableMinimizedByFinalizer(time_dimension.CumulVar(routing.Start(vehicle_id)))
         routing.AddVariableMaximizedByFinalizer(time_dimension.CumulVar(routing.End(vehicle_id)))
@@ -319,21 +339,33 @@ def route_optimizer(dist_matrix, num_clinicians, start_list, end_list,
         """
         # Convert the routing variable Index to weights NodeIndex (ie the demand for the visit)
         from_node = manager.IndexToNode(from_index)
-        return weights[from_node-len(start_list)]
+        return weights[from_node]
 
     # Create a demand callback index to allow for dropping visits if capacities are reached
     demand_callback_index = routing.RegisterUnaryTransitCallback(demand_callback)
     routing.AddDimensionWithVehicleCapacity(
-        demand_callback_index,
+        demand_callback_index,  # Add weight of visit to clinician's daily weight
         0,
         capacities,
         True,
         "Capacity"
     )
 
+    # Set limits on weight per day. Minumum is 80% of max constraints
+    # This will accumulate over each visit
+    capacity_dimension = routing.GetDimensionOrDie(dimension_name="Capacity")
+    for clin in range(num_clinicians):
+        index = routing.End(clin)
+        try:
+            capacity_dimension.CumulVar(index).SetRange(int(capacities[clin]*0.8), capacities[clin])
+        except TypeError as err:
+            raise err
+
     # Define penalties, which will be proportional to the value of the visit priority for each index
+    # Penalty cost will only be added if the disjunction is missed (ie a higher value should be less desirable to skip)
     for node in range(len(start_list), len(dist_matrix) - len(end_list)):
-        routing.AddDisjunction([manager.NodeToIndex(node)], priorities[node - len(start_list)])
+        # Each node is made a disjunction so that it is an optional visit. "Red" visits will not be optional
+        routing.AddDisjunction([manager.NodeToIndex(node)], priorities[node])
 
     # Set the search parameters and a heuristic for initial solution (prioritize cheapest arc - ie least transit time)
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
@@ -498,8 +530,8 @@ def print_solution(clin_index,  clin, visits, n_start_list, manager, routing, so
         time_var = time_dimension.CumulVar(index)
         leave_by = datetime.timedelta(minutes=solution.Max(time_var))
         plan_output += f'  {visit.patient_name} ' \
-                       f'(Start by: {visit.time_earliest}, ' \
-                       f'Leave by: {leave_by}) ->'
+                       f'(Start by: {visit._time_earliest.strftime("%H:%M")}, ' \
+                       f'Leave by: {str(leave_by).rstrip(":")}) ->'
         index = solution.Value(routing.NextVar(index))
 
     # Add final index

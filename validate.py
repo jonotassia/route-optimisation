@@ -8,8 +8,6 @@ import classes.person
 import navigation
 import boto3
 
-import validate
-
 
 def qu_input(prompt):
     value = input(prompt)
