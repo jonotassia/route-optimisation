@@ -679,70 +679,6 @@ class Clinician(Human):
         self.__dict__.update(kwargs)
 
     @property
-    def discipline(self):
-        try:
-            return self._discipline.capitalize()
-
-        except AttributeError:
-            return None
-
-    @discipline.setter
-    def discipline(self, value):
-        if not value:
-            self._discipline = None
-
-        else:
-            discipline = validate.valid_cat_list(value, self._c_discipline)
-
-            if discipline:
-                self._discipline = discipline
-
-            else:
-                raise ValueError(f"{value.capitalize()} is not a valid discipline.")
-
-    @property
-    def skill_list(self):
-        try:
-            return ", ".join(self._skill_list).capitalize()
-
-        except TypeError:
-            return None
-
-    @skill_list.setter
-    def skill_list(self, value: list):
-        if not value:
-            self._skill_list = None
-
-        else:
-            skill_list = []
-
-            for skill in value:
-                skill = validate.valid_cat_list(skill, self._c_skill_list)
-
-                if skill:
-                    skill_list.append(skill)
-
-                else:
-                    raise ValueError(f"{skill.capitalize()} is not a valid skill.")
-
-            self._skill_list = skill_list
-
-    @property
-    def inactive_reason(self):
-        return self._inactive_reason
-
-    @inactive_reason.setter
-    def inactive_reason(self, value):
-        """Checks values of inactive reason before assigning"""
-        reason = validate.valid_cat_list(value, self._c_inactive_reason)
-
-        if reason:
-            self._inactive_reason = reason
-
-        else:
-            raise ValueError(f"Invalid selection. Value not in {self._c_inactive_reason}")
-
-    @property
     def start_address(self):
         """
         Displays an address parsed using USAddress. Loops through values in dictionary to output human-readable address.
@@ -844,9 +780,76 @@ class Clinician(Human):
 
     @property
     def capacity(self):
-        """Maximum weight of visits a clinician can undertake. This is based on total shift time divided by 10"""
-        shift_length = self._end_time - self._start_time
-        return shift_length.minutes / 10
+        """
+        Maximum weight of visits a clinician can undertake. This is based on the assumption that in an 8 hour day,
+        a clinician can complete a maximum of 5 complex visits (weight 3). Therefore, an 8 hour day has capacity 15.
+        """
+        shift_length = (self._end_time.hour - self._start_time.hour)*60 + self._end_time.minute - self._start_time.minute
+        return int(shift_length / 32)
+
+    @property
+    def discipline(self):
+        return self._discipline.capitalize()
+
+    @discipline.setter
+    def discipline(self, value):
+        if not value:
+            self._discipline = "none"
+
+        else:
+            discipline = validate.valid_cat_list(value, self._c_discipline)
+
+            if discipline:
+                self._discipline = discipline
+
+            else:
+                raise ValueError(f"{value.capitalize()} is not a valid discipline.")
+
+    @property
+    def skill_list(self):
+        try:
+            return ", ".join(self._skill_list).capitalize()
+
+        except TypeError:
+            return None
+
+    @skill_list.setter
+    def skill_list(self, value: list):
+        if not value:
+            self._skill_list = None
+
+        else:
+            skill_list = []
+
+            # Confirm data type of passed in value. Make sure it can handle both strings and lists
+            if isinstance(value, str):
+                value = value.replace("\n", ", ").split(", ")
+
+            for skill in value:
+                skill = validate.valid_cat_list(skill, self._c_skill_list)
+
+                if skill:
+                    skill_list.append(skill)
+
+                else:
+                    raise ValueError(f"{skill.capitalize()} is not a valid skill.")
+
+            self._skill_list = skill_list
+
+    @property
+    def inactive_reason(self):
+        return self._inactive_reason
+
+    @inactive_reason.setter
+    def inactive_reason(self, value):
+        """Checks values of inactive reason before assigning"""
+        reason = validate.valid_cat_list(value, self._c_inactive_reason)
+
+        if reason:
+            self._inactive_reason = reason
+
+        else:
+            raise ValueError(f"Invalid selection. Value not in {self._c_inactive_reason}")
 
     def update_self(self):
         """

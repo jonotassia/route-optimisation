@@ -227,6 +227,7 @@ def import_csv(cls):
                 return 0
 
             import_data = pd.read_csv(filepath)
+            import_data = import_data.fillna(0)
             data_dict_list = import_data.to_dict("records")
 
             # Loop through each dict from the import and initialize + save a new object

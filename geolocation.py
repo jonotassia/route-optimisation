@@ -61,21 +61,17 @@ def optimize_trip(clin_id=""):
     # Create a list of visits by loading all visits attached to the clinician only if they are scheduled for input date.
     visits = [in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl") for visit_id in visits_by_date]
 
-    # Distill visits into list of place_ids and add the clinician's start and end address
-    plus_code_list = [clin.start_plus_code] + [visit.plus_code for visit in visits] + [clin.end_plus_code]
-
-    # Create time windows
-    time_windows = [(visit.time_earliest, visit.time_latest) for visit in visits]
+    # Generate data for optimisation problem. Pass clinician as a list top proper handling.
+    data_dict = generate_data(visits, [clin])
 
     # Generate distance matrix
-    dist_matrix = create_dist_matrix(plus_code_list)
+    dist_matrix = create_dist_matrix(data_dict["plus_code_list"])
 
     # Calculate optimal route - this returns a list of lists per clinician, so can safely assume we want index 0
-    manager, routing, solution = route_optimizer(dist_matrix,
-                                                 num_clinicians=1,
-                                                 start_list=[0],
-                                                 end_list=[len(dist_matrix)-1],
-                                                 time_windows=time_windows)
+    manager, routing, solution = route_optimizer(dist_matrix, 1, data_dict["start_list"],
+                                                 data_dict["end_list"], data_dict["time_windows"],
+                                                 data_dict["capacities"], data_dict["weights"],
+                                                 data_dict["priorities"])
 
     print_solution(0, clin, visits, 1, manager, routing, solution)
     route_order = return_solution(0, manager, routing, solution)
@@ -89,8 +85,6 @@ def optimize_trip(clin_id=""):
 
     # # Plot coords on map
     # map_features(route=ordered_route_coords)
-
-    # TODO: Add constraints for start and end time
 
 
 def optimize_team(team_id=""):
@@ -119,8 +113,6 @@ def optimize_team(team_id=""):
         sleep(1.5)
         return 0
 
-    pats = [in_out.load_obj(classes.person.Patient, f"./data/Patient/{pat_id}.pkl") for pat_id in team._pat_id]
-
     # Prompt user for date for optimization and validate format
     while True:
         inp_date = validate.qu_input("Please select a date to optimize the route: ")
@@ -138,6 +130,9 @@ def optimize_team(team_id=""):
         if val_date:
             break
 
+    # Grab patients linked to team
+    pats = [in_out.load_obj(classes.person.Patient, f"./data/Patient/{pat_id}.pkl") for pat_id in team._pat_id]
+
     # Grab all visits across all patients in team, then unpack for single list of team visits
     team_visits = []
 
@@ -152,45 +147,28 @@ def optimize_team(team_id=""):
             visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
             team_visits.append(visit)
 
-    team_plus_codes = [visit.plus_code for visit in team_visits]
-
-    # Load all clinicians in team and populate list of start and end plus codes
+    # Create list of all clinicians linked to team
     clins = [in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{clin_id}.pkl") for clin_id in team._clin_id]
-    start_list = [clin.start_plus_code for clin in clins]
-    end_list = [clin.end_plus_code for clin in clins]
 
-    # Combine clinician and patient addresses together
-    plus_code_list = start_list + team_plus_codes + end_list
+    # Generate data for optimisation problem.
+    data_dict = generate_data(team_visits, clins)
 
     # calculate distance matrix
-    dist_matrix = create_dist_matrix(plus_code_list)
-
-    # Pass through start and end list (last N indices of plus code list) as indices of distance matrix
-    start_indices = [num for num in range(len(start_list))]
-    end_indices = [num for num in range(len(start_list) + len(team_plus_codes), len(plus_code_list))]
-
-    def convert_to_min(_time):
-        """
-        Takes a datetime object (time) and outputs a total in minutes
-        :param _time: Datetime object (time)
-        :return: Total time in minutes
-        """
-        return _time.hour*60 + _time.minute
-
-    # Create time windows - use private variable for access to datetime value
-    clin_window = [(convert_to_min(clin._start_time), convert_to_min(clin._end_time)) for clin in clins]
-    visit_window = [(convert_to_min(visit._time_earliest), convert_to_min(visit._time_latest)) for visit in team_visits]
-    time_windows = clin_window + visit_window
+    dist_matrix = create_dist_matrix(data_dict["plus_code_list"])
 
     # Optimize routes
-    manager, routing, solution = route_optimizer(dist_matrix, team.team_size, start_indices, end_indices, time_windows)
+    manager, routing, solution = route_optimizer(dist_matrix, team.team_size, data_dict["start_list"],
+                                                 data_dict["end_list"], data_dict["time_windows"],
+                                                 data_dict["capacities"], data_dict["weights"],
+                                                 data_dict["priorities"])
 
     # Create optimal route order and assign to each clinician
     for i, clin in enumerate(clins):
-        print_solution(i, clin, team_visits, len(start_list), manager, routing, solution)
+        print_solution(i, clin, team_visits, len(data_dict["start_list"]), manager, routing, solution)
         route_order = return_solution(i, manager, routing, solution)
+
         # Remove the start and end locations of each address and subtract length of start index list from each index
-        clin_visits = [team_visits[index-len(start_list)] for index in route_order[1:-1]]
+        clin_visits = [team_visits[index-len(data_dict["start_list"])] for index in route_order[1:-1]]
 
         # Assign clinician to visit (which assigns the visit to the clinician as well) and save
         for visit in clin_visits:
@@ -198,16 +176,81 @@ def optimize_team(team_id=""):
             visit.write_self()
 
     # TODO: Add constraints for already assigned visits
-    # TODO: Make sure this assigns the visits to clinicians
 
 
-def route_optimizer(dist_matrix, num_clinicians, start_list, end_list, time_windows):
+def generate_data(visits, clins):
+    """
+    Generates the relevant data for route optimization problems.
+    :param visits: List of visits
+    :param clins: List of clinicians
+    :return: Dictionary with the following data:
+        - List of starting locations for each clinician
+        - List of end locations for each clinician
+        - Time windows for each clinician and visit
+        - Capacity for each clinician
+        - Weights for each visit based on complexity
+        - Priority for each visit
+    """
+    visit_plus_codes = [visit.plus_code for visit in visits]
+
+    # Load all clinicians in team and populate list of start and end plus codes
+    start_list = [clin.start_plus_code for clin in clins]
+    end_list = [clin.end_plus_code for clin in clins]
+
+    # Combine clinician and patient addresses together
+    plus_code_list = start_list + visit_plus_codes + end_list
+
+    # Pass through start and end list (last N indices of plus code list) as indices of distance matrix
+    start_indices = [num for num in range(len(start_list))]
+    end_indices = [num for num in range(len(start_list) + len(visit_plus_codes), len(plus_code_list))]
+
+    def convert_to_min(_time):
+        """
+        Takes a datetime object (time) and outputs a total in minutes
+        :param _time: Datetime object (time)
+        :return: Total time in minutes
+        """
+        return _time.hour * 60 + _time.minute
+
+    # Create time windows - use private variable for access to datetime value
+    clin_window = [(convert_to_min(clin._start_time), convert_to_min(clin._end_time)) for clin in clins]
+    visit_window = [(convert_to_min(visit._time_earliest), convert_to_min(visit._time_latest)) for visit in visits]
+    time_windows = clin_window + visit_window
+
+    # Get capacity information
+    capacities = [clin.capacity for clin in clins]
+
+    # Get weight information, which is numerically represented as complexity index plus 1 for each visit
+    weights = [visit._c_visit_complexity.index(visit._visit_complexity)+1 for visit in visits]
+
+    # Get priority information, which is numerically represented as priority index plus 1 for each visit
+    priorities = [visit._c_visit_priority.index(visit._visit_priority)+1 for visit in visits]
+
+    data_dict = {
+        "plus_code_list": plus_code_list,
+        "start_list": start_indices,
+        "end_list": end_indices,
+        "time_windows": time_windows,
+        "capacities": capacities,
+        "weights": weights,
+        "priorities": priorities
+    }
+
+    return data_dict
+
+
+def route_optimizer(dist_matrix, num_clinicians, start_list, end_list,
+                    time_windows, capacities, weights, priorities):
     """
     Passes locations through route optimizer to generate optimal route solution.
-    :param dist_matrix:
+    :param dist_matrix: A matrix outlining the amount of time required to transit to each location
     :param num_clinicians: Number of clinicians to consider in calculation
     :param start_list: List of starting location indexes for each clinician
     :param end_list: List of ending location indexes for each clinician
+    :param time_windows: The time windows that each location should be visited
+    :param capacities: A numeric representation of the max weight (AKA complexity) a clinician can complete in a day
+    :param weights: The weight of a visit, derived from visit complexity
+    :param priorities: A numeric representation of visit priority. Determines which visits should be dropped first
     :return: Optimized solution
     """
     # Create index/routing manager - location number corresponds to index in distance matrix (0 = start, last = end)
@@ -267,6 +310,30 @@ def route_optimizer(dist_matrix, num_clinicians, start_list, end_list, time_wind
 
     # Enable the routing function to use this transit time as its arc cost measurement
     routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
+
+    def demand_callback(from_index):
+        """
+        Returns the demand of the node.
+        :param from_index: Routing variable index
+        :return: Index of demand node
+        """
+        # Convert the routing variable Index to weights NodeIndex (ie the demand for the visit)
+        from_node = manager.IndexToNode(from_index)
+        return weights[from_node-len(start_list)]
+
+    # Create a demand callback index to allow for dropping visits if capacities are reached
+    demand_callback_index = routing.RegisterUnaryTransitCallback(demand_callback)
+    routing.AddDimensionWithVehicleCapacity(
+        demand_callback_index,
+        0,
+        capacities,
+        True,
+        "Capacity"
+    )
+
+    # Define penalties, which will be proportional to the value of the visit priority for each index
+    for node in range(len(start_list), len(dist_matrix) - len(end_list)):
+        routing.AddDisjunction([manager.NodeToIndex(node)], priorities[node - len(start_list)])
 
     # Set the search parameters and a heuristic for initial solution (prioritize cheapest arc - ie least transit time)
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
@@ -431,14 +498,14 @@ def print_solution(clin_index,  clin, visits, n_start_list, manager, routing, so
         time_var = time_dimension.CumulVar(index)
         leave_by = datetime.timedelta(minutes=solution.Max(time_var))
         plan_output += f'  {visit.patient_name} ' \
-                       f'(Start by: {visit.start_time}, ' \
+                       f'(Start by: {visit.time_earliest}, ' \
                        f'Leave by: {leave_by}) ->'
         index = solution.Value(routing.NextVar(index))
 
     # Add final index
     time_var = time_dimension.CumulVar(index)
     plan_output += f' Return'
-    plan_output += f'\nRoute Time: {solution.Min(time_var)/60} minutes.'
+    plan_output += f'\nRoute Time: {int(solution.Min(time_var)/60)} minutes.'
 
     print(plan_output)
 

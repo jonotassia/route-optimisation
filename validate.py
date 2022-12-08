@@ -210,8 +210,8 @@ def valid_cat_list(value, cat_list):
     # Return corresponding index value if entered as alphanum
     str_cat_list = [str(cat) for cat in cat_list]
 
-    if value in str_cat_list:
-        return value
+    if value.lower() in str_cat_list:
+        return value.lower()
 
     # Return index value if entered as numeric and is an index in the category list
     elif str(value).isnumeric() and int(value) - 1 < len(cat_list):
@@ -251,6 +251,13 @@ def get_info(obj, attr_dict_list: list):
             # Prompt user with user-friendly text, then return value until
             value = qu_input(f"\nSelection: ")
 
+            if not value:
+                if yes_or_no("You have left this information blank. Would you like to quit? "):
+                    return 0
+
+                else:
+                    continue
+
             # For multiselect items, continue to ask for additional values
             try:
                 if attr_dict["multiselect"]:
@@ -266,13 +273,7 @@ def get_info(obj, attr_dict_list: list):
             except KeyError:
                 pass
 
-            if not value:
-                if yes_or_no("You have left this information blank. Would you like to quit? "):
-                    return 0
-
-                else:
-                    continue
-
+            # Set the attribute (from the list if multiselect, else the value string)
             try:
                 try:
                     if attr_dict["multiselect"]:

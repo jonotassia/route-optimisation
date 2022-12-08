@@ -12,14 +12,14 @@ class Visit:
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
     _tracked_instances = {}
     _instance_by_date = {}
-    _c_visit_complexity = ("complex", "routine", "simple")
+    _c_visit_complexity = ("simple", "routine", "complex")
     _c_visit_priority = ("green", "amber", "red")
     _c_skill_list = classes.person.Clinician._c_skill_list
     _c_discipline = classes.person.Clinician._c_discipline
     _c_sched_status = ("unassigned", "assigned", "no show", "cancelled")
     _c_cancel_reason = ("clinician unavailable", "patient unavailable", "no longer needed", "expired", "system action")
 
-    def __init__(self, pat_id, status=1, sched_status="unscheduled", time_earliest="", time_latest="",
+    def __init__(self, pat_id, clin_id=None, status=1, sched_status="unscheduled", time_earliest="", time_latest="",
                  exp_date="", visit_complexity=_c_visit_complexity[1], visit_priority=_c_visit_priority[0],
                  skill_list=[], discipline="", **kwargs):
         """Initializes a new request and links with pat_id. It contains the following attributes:
@@ -27,7 +27,7 @@ class Visit:
         self._id = next(self._id_iter)
         self.exp_date = exp_date
         self.pat_id = pat_id
-        self.clin_id = None
+        self.clin_id = clin_id
         self._name = "Visit" + str(self._id)
         self.status = status
         self.time_earliest = time_earliest
@@ -243,6 +243,7 @@ class Visit:
                 except KeyError:
                     pass
 
+                # Remove from patient if there is already an entry
                 try:
                     pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self.pat_id}.pkl")
                     if pat:
@@ -252,6 +253,7 @@ class Visit:
                 except KeyError:
                     pass
 
+                # Remove from clinician if there is already an entry
                 try:
                     clin = in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{self.clin_id}.pkl")
                     if clin:
@@ -354,6 +356,10 @@ class Visit:
         else:
             skill_list = []
 
+            # Confirm data type of passed in value. Make sure it can handle both strings and lists
+            if isinstance(value, str):
+                value = value.replace("\n", ", ").split(", ")
+
             for skill in value:
                 skill = validate.valid_cat_list(skill, self._c_skill_list)
 
@@ -367,16 +373,12 @@ class Visit:
 
     @property
     def discipline(self):
-        try:
-            return self._discipline.capitalize()
-
-        except AttributeError:
-            return "Any"
+        return self._discipline.capitalize()
 
     @discipline.setter
     def discipline(self, value):
         if not value:
-            self._discipline = None
+            self._discipline = "any"
 
         else:
             discipline = validate.valid_cat_list(value, self._c_discipline)
