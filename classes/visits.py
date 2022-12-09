@@ -133,6 +133,12 @@ class Visit:
             # Load clinician and create or add to the search by date list for visits
             old_clin_id = self._clin_id
 
+            # Remove from old clinician if there is one
+            if old_clin_id != value:
+                old_clin = in_out.load_obj(classes.person.Patient, f"./data/Clinician/{old_clin_id}.pkl")
+                old_clin.visits[self.exp_date].remove(self.id)
+                old_clin.write_self()
+
             clin = in_out.load_obj(classes.person.Patient, f"./data/Clinician/{value}.pkl")
 
             # If the visit is not already assigned to the clinician, assign it
@@ -144,12 +150,6 @@ class Visit:
                 clin.visits[self.exp_date] = [self.id]
 
             clin.write_self()
-
-            # Remove from old clinician if there is one
-            if old_clin_id:
-                old_clin = in_out.load_obj(classes.person.Patient, f"./data/Clinician/{old_clin_id}.pkl")
-                old_clin.visits[self.exp_date].remove(self.id)
-                old_clin.write_self()
 
             self._clin_id = value
 

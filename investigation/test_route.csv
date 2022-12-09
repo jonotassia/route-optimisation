@@ -1,0 +1,8 @@
+Visit ID,Clinician,Patient Name,Start By,Leave By,Priority,Complexity,Skills Required,Address,Driving Time
+10002,UNASSIGNED,"Tassia, Ghassan ",1200,1400,Green,Routine,Specimen collection,"7500 8th Ave SW, Seattle, WA 98106, USA",N/A
+10000,"Jimmy, Timmy ","Rose, Kate Linda",0800,0 days 10:00:00,Amber,Complex,Med administration,"3500 NE 41st St, Seattle, WA 98105, USA",8
+10001,"Jimmy, Timmy ","Tassia, Michael G",0900,0 days 11:00:00,Red,Complex,Domestic tasks,"The Nelson, 14300 Greenwood Ave N, Seattle, WA 98133, USA",9
+10003,"Ronnie, Bonnie ","Tassia, Tresa ",0800,0 days 11:53:00,Red,Routine,"Specimen collection, domestic tasks","2033 2nd Ave, Seattle, WA 98121, USA",10
+10006,"Ronnie, Bonnie ","Flufferson, Wald ",1100,0 days 12:00:00,Green,Routine,Specimen collection,"115 Prefontaine Pl S, Seattle, WA 98104, USA",11
+10005,"Ronnie, Bonnie ","Flufferson, Wald ",1200,0 days 13:00:00,Amber,Simple,"Domestic tasks, physical assessment","115 Prefontaine Pl S, Seattle, WA 98104, USA",12
+10002,"Ronnie, Bonnie ","Tassia, Ghassan ",1200,0 days 14:00:00,Green,Routine,Specimen collection,"7500 8th Ave SW, Seattle, WA 98106, USA",12

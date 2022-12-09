@@ -1,4 +1,7 @@
 # Contains functions related to geolocation using Placekey and mlrose
+import pandas
+import pandas as pd
+
 import in_out
 import classes
 import numpy as np
@@ -78,12 +81,15 @@ def optimize_trip(clin_id=""):
         sleep(2)
         return 0
 
-    print_solution(0, clin, visits, 1, manager, routing, solution)
-    route_order = return_solution(0, manager, routing, solution)
+    # Assign and print all nodes that could not be visited
+    dropped_nodes = (node for node in range(routing.Size())
+                     if solution.Value(routing.NextVar(node)) == node
+                     and not routing.IsStart(node)
+                     and not routing.IsEnd(node))
 
-    # Resequence clinician visits for future use, but cut off start and end address and subtract 1 from counter.
-    clin.visits[val_date] = [visits[i-1].id for i in route_order[1:-1]]
-    clin.write_self()
+    # Create optimal route order and assign to each clinician. Pass clin as list for proper handling
+    rt_detail = return_solution([clin], visits, len(data_dict["start_list"]),
+                                dropped_nodes, manager, routing, solution)
 
     # # Save route as coordinates. JavaScript API only works using coordinates
     # ordered_route_coords = [clin.start_coord] + [visits[i-1].coord for i in route_order[1:-1]] + [clin.end_coord]
@@ -172,29 +178,15 @@ def optimize_team(team_id=""):
         sleep(2)
         return 0
 
+    # Find all nodes that could not be visited
+    dropped_nodes = (node for node in range(routing.Size())
+                     if solution.Value(routing.NextVar(node)) == node
+                     and not routing.IsStart(node)
+                     and not routing.IsEnd(node))
+
     # Create optimal route order and assign to each clinician
-    for i, clin in enumerate(clins):
-        # Assign and print all nodes that could not be visited
-        dropped_nodes = (node for node in range(routing.Size())
-                         if solution.Value(routing.NextVar(node)) == node
-                         and not routing.IsStart(node)
-                         and not routing.IsEnd(node))
-        print(f"The following patients could not be seen: ")
-        for node in dropped_nodes:
-            print(f"{node}) {team_visits[node].patient_name}: {team_visits[node].time_earliest} - {team_visits[node].time_latest}\n"
-                  f"    Priority: {team_visits[node].visit_priority}, Complexity: {team_visits[node].visit_complexity}")
-
-        # Print and assign route by clinician
-        print_solution(i, clin, team_visits, len(data_dict["start_list"]), manager, routing, solution)
-        route_order = return_solution(i, manager, routing, solution)
-
-        # Remove the start and end locations of each address and subtract length of start index list from each index
-        clin_visits = [team_visits[index-len(data_dict["start_list"])] for index in route_order[1:-1]]
-
-        # Assign clinician to visit (which assigns the visit to the clinician as well) and save
-        for visit in clin_visits:
-            visit.clin_id = clin.id
-            visit.write_self()
+    rt_detail = return_solution(clins, team_visits, len(data_dict["start_list"]),
+                                dropped_nodes, manager, routing, solution)
 
     return 1
 
@@ -244,12 +236,12 @@ def generate_data(visits, clins):
     capacities = [clin.capacity for clin in clins]
 
     # Get weight information, which is numerically represented as complexity index plus 1 for each visit
-    visit_weights = [visit._c_visit_complexity.index(visit._visit_complexity)+1 for visit in visits]
+    visit_weights = [visit._c_visit_complexity.index(visit._visit_complexity) + 1 for visit in visits]
     weights = [0] * len(start_list) + visit_weights + [0] * len(end_list)
 
     # Get priority information, which is numerically represented as priority index ^4 in order to significantly
     # punish for missing a "Red" visit
-    visit_priorities = [(visit._c_visit_priority.index(visit._visit_priority)+1)**4 for visit in visits]
+    visit_priorities = [(visit._c_visit_priority.index(visit._visit_priority) + 1) ** 4 for visit in visits]
     priorities = [0] * len(start_list) + visit_priorities + [0] * len(end_list)
 
     data_dict = {
@@ -345,7 +337,7 @@ def route_optimizer(dist_matrix, num_clinicians, start_list, end_list,
     demand_callback_index = routing.RegisterUnaryTransitCallback(demand_callback)
     routing.AddDimensionWithVehicleCapacity(
         demand_callback_index,  # Add weight of visit to clinician's daily weight
-        0,
+        100,
         capacities,
         True,
         "Capacity"
@@ -357,7 +349,7 @@ def route_optimizer(dist_matrix, num_clinicians, start_list, end_list,
     for clin in range(num_clinicians):
         index = routing.End(clin)
         try:
-            capacity_dimension.CumulVar(index).SetRange(int(capacities[clin]*0.8), capacities[clin])
+            capacity_dimension.CumulVar(index).SetRange(int(capacities[clin] * 0.8), capacities[clin])
         except TypeError as err:
             raise err
 
@@ -451,7 +443,8 @@ def create_dist_matrix(plus_code_list):
         if not response:
             return 0
 
-        distance_matrix[rows_per_send * num_queries: rows_per_send * num_queries + remaining_rows] = build_dist_matrix(response.json())
+        distance_matrix[rows_per_send * num_queries: rows_per_send * num_queries + remaining_rows] = build_dist_matrix(
+            response.json())
 
     return distance_matrix
 
@@ -486,7 +479,7 @@ def build_dist_matrix(response):
 
     for row in response['rows']:
         # Loop through each element in the rows of the response and populate a list of each value
-        row_list = [int(row['elements'][i]['duration']['value']/60) for i in range(len(row["elements"]))]
+        row_list = [int(row['elements'][i]['duration']['value'] / 60) for i in range(len(row["elements"]))]
 
         # Add row list to the array
         distance_matrix.append(row_list)
@@ -494,7 +487,127 @@ def build_dist_matrix(response):
     return distance_matrix
 
 
-def print_solution(clin_index,  clin, visits, n_start_list, manager, routing, solution):
+def return_solution(clins, visits, n_start_list, dropped_nodes, manager, routing, solution):
+    """
+    Prompts the user whether they want to print route solution to screen or file
+    :param clins: Clinician whose route is being optimized
+    :param visits: List of visits in optimisation problem
+    :param n_start_list: number of starting locations in address list
+    :param dropped_nodes: Represents all visits that could not be seen as part of the solution
+    :param manager: Index manager - parses details from distance matrix
+    :param routing: Routing Model - sets parameters for solution
+    :param solution: Solution from routing model
+    :return: None
+    """
+    # Prompt user about whether to print to screen or csv
+    print("Please select how you would like to view the route information:\n"
+          "     1) Print to Screen (Quick)\n"
+          "     2) Print to Screen (Table)\n"
+          "     3) Print to File\n")
+
+    selection = -1
+    while selection not in ["1", "2", "3"]:
+        selection = validate.qu_input("Selection: ")
+
+        if not selection:
+            return 0
+
+    # Print to Screen in text
+    if selection == "1":
+        # Print dropped nodes
+        print(f"The following patients could not be seen: ")
+        for node in dropped_nodes:
+            print(
+                f"{node}) {visits[node].patient_name}: {visits[node].time_earliest} - {visits[node].time_latest}, "
+                f"Priority: {visits[node].visit_priority}, Complexity: {visits[node].visit_complexity}")
+
+        for clin_index, clin in enumerate(clins):
+            print_to_screen(clin_index, clin, visits, n_start_list, manager, routing, solution)
+
+            # Define route order for assignment to clinician
+            route_order = return_route(clin_index, manager, routing, solution)
+
+            # Remove the start and end locations of each address and subtract length of start index list from each index
+            clin_visits = [visits[index - n_start_list] for index in route_order[1:-1]]
+
+            # Assign clinician to visit (which assigns the visit to the clinician as well) and save
+            for visit in clin_visits:
+                visit.clin_id = clin.id
+                visit.write_self()
+
+        return None
+
+    # Print to screen as dataframe
+    if selection == "2" or "3":
+        # Generate a dict of all visits that could not be undertaken for this team
+        dropped_nodes_dict = {}
+        for node in dropped_nodes:
+            dropped_nodes_dict[visits[node].id] = {
+                "Clinician": "UNASSIGNED",
+                "Patient Name": visits[node].patient_name,
+                "Start By": visits[node].time_earliest,
+                "Leave By": visits[node].time_latest,
+                "Priority": visits[node].visit_priority,
+                "Complexity": visits[node].visit_complexity,
+                "Skills Required": visits[node].skill_list,
+                "Address": visits[node].address,
+                "Driving Time": "N/A"
+            }
+        # Convert and display dropped nodes dataframe
+        dropped_nodes_df = pd.DataFrame.from_dict(dropped_nodes_dict, orient="index")
+
+        # Initialize a solutions dataframe and add dropped nodes to it
+        solution_df = pandas.DataFrame(columns=["Clinician", "Patient Name", "Start By", "Leave By", "Priority",
+                                                "Complexity", "Skills Required", "Address", "Driving Time"])
+        solution_df = pd.concat([solution_df, dropped_nodes_df])
+
+        for clin_index, clin in enumerate(clins):
+            # Generate a solution dictionary for each clinician, then batch visits to assign to clinician
+            rt_detail = print_to_table(clin_index, clin, visits, n_start_list, manager, routing, solution)
+
+            # Define route order for assignment to clinician
+            route_order = return_route(clin_index, manager, routing, solution)
+
+            # Remove the start and end locations of each address and subtract length of start index list from each index
+            clin_visits = [visits[index - n_start_list] for index in route_order[1:-1]]
+
+            # Assign clinician to visit (which assigns the visit to the clinician as well) and save
+            for visit in clin_visits:
+                visit.clin_id = clin.id
+                visit.write_self()
+
+            # Convert rt_details to Pandas table and display
+            rt_detail = pd.DataFrame.from_dict(rt_detail, orient="index")
+            solution_df = pd.concat([solution_df, rt_detail])
+
+        solution_df.index.name = "Visit ID"
+
+        # Save file
+        if selection == "3":
+            while True:
+                # Get file path from user
+                path = validate.qu_input("File path to save (*.csv): ")
+
+                # Prompt user if they want to continue if no path entered. If no, short circuit and print to screen
+                if not path:
+                    cont = validate.qu_input("No file path entered. Print to screen instead? ")
+                    if cont:
+                        break
+
+                try:
+                    solution_df.to_csv(path)
+
+                except (FileNotFoundError, OSError):
+                    print("Invalid path.")
+
+                return solution_df
+
+        # Display the full solution data frame. Occurs if a user selected 2 or did not provide a path for csv
+        print(solution_df.to_markdown())
+        return solution_df
+
+
+def print_to_screen(clin_index, clin, visits, n_start_list, manager, routing, solution):
     """
     Prints the solution to the route optimisation problem to the console.
     :param clin_index: Index of the clinician whose route is being optimized
@@ -513,7 +626,7 @@ def print_solution(clin_index,  clin, visits, n_start_list, manager, routing, so
 
     # Start routing for clinician
     index = routing.Start(clin_index)
-    plan_output = f"Optimal route for {clin.name}: \n"
+    plan_output = f"\nOptimal route for {clin.name}: \n"
     route_time = 0
 
     # Start routing output
@@ -525,7 +638,7 @@ def print_solution(clin_index,  clin, visits, n_start_list, manager, routing, so
     # Add each index to plan_output
     while not routing.IsEnd(index):
         # Subtract number of items in start list from node to match with visits in visit list
-        visit = visits[manager.IndexToNode(index)-n_start_list]
+        visit = visits[manager.IndexToNode(index) - n_start_list]
         # Get time window for each location
         time_var = time_dimension.CumulVar(index)
         leave_by = datetime.timedelta(minutes=solution.Max(time_var))
@@ -537,12 +650,62 @@ def print_solution(clin_index,  clin, visits, n_start_list, manager, routing, so
     # Add final index
     time_var = time_dimension.CumulVar(index)
     plan_output += f' Return'
-    plan_output += f'\nRoute Time: {int(solution.Min(time_var)/60)} minutes.'
+    plan_output += f'\nRoute Time: {int(solution.Min(time_var) / 60)} minutes.'
 
     print(plan_output)
 
 
-def return_solution(clin_index, manager, routing, solution):
+def print_to_table(clin_index, clin, visits, n_start_list, manager, routing, solution):
+    """
+    Prints the solution to the route optimisation problem to a table using Pandas.
+    :param clin_index: Index of the clinician whose route is being optimized
+    :param clin: Clinician whose route is being optimized
+    :param visits: List of visits in optimisation problem
+    :param n_start_list: number of starting locations in address list
+    :param manager: Index manager - parses details from distance matrix
+    :param routing: Routing Model - sets parameters for solution
+    :param solution: Solution from routing model
+    :return: None
+    """
+    # Create a solutions dict
+    solutions_dict = {}
+
+    # Get time dimension
+    time_dimension = routing.GetDimensionOrDie('Time')
+
+    # Start routing for clinician
+    index = routing.Start(clin_index)
+    route_time = 0
+
+    # Start routing output
+    previous_index = index
+    index = solution.Value(routing.NextVar(index))
+    route_time += routing.GetArcCostForVehicle(previous_index, index, 0)
+
+    # Add each index to plan_output
+    while not routing.IsEnd(index):
+        # Subtract number of items in start list from node to match with visits in visit list
+        visit = visits[manager.IndexToNode(index) - n_start_list]
+        # Get time window for each location
+        time_var = time_dimension.CumulVar(index)
+        leave_by = datetime.timedelta(minutes=solution.Max(time_var))
+        solutions_dict[visit.id] = {
+            "Clinician": clin.name,
+            "Patient Name": visit.patient_name,
+            "Start By": visit.time_earliest,
+            "Leave By": leave_by,
+            "Priority": visit.visit_priority,
+            "Complexity": visit.visit_complexity,
+            "Skills Required": visit.skill_list,
+            "Address": visit.address,
+            "Driving Time": int(solution.Min(time_var) / 60)
+        }
+        index = solution.Value(routing.NextVar(index))
+
+    return solutions_dict
+
+
+def return_route(clin_index, manager, routing, solution):
     """
     Returns the solution to the route optimisation problem to the console.
     :param clin_index: Index of the clinician whose route is being optimized

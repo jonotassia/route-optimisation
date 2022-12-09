@@ -215,23 +215,19 @@ def geo_feat():
               "    1) Clinician Optimizer\n"
               "    2) Team Optimizer\n")
 
-        try:
+        selection = validate.qu_input("Selection: ")
 
-            selection = validate.qu_input("Selection: ")
+        if not selection:
+            return 0
 
-            if not selection:
-                return 0
+        elif selection == "1":
+            geolocation.optimize_trip()
+            continue
 
-            elif selection == "1":
-                geolocation.optimize_trip()
-                continue
+        elif selection == "2":
+            geolocation.optimize_team()
+            continue
 
-            elif selection == "2":
-                geolocation.optimize_team()
-                continue
+        else:
+            print("Invalid selection.")
 
-            else:
-                print("Invalid selection.")
-
-        except TypeError:
-            print("Please select an option by number from the list above.\n")
