@@ -208,8 +208,8 @@ def valid_cat_list(value, cat_list):
     # Return corresponding index value if entered as alphanum
     str_cat_list = [str(cat) for cat in cat_list]
 
-    if value in str_cat_list:
-        return value
+    if value.lower() in str_cat_list:
+        return value.lower()
 
     # Return index value if entered as numeric and is an index in the category list
     elif str(value).isnumeric() and int(value) - 1 < len(cat_list):
@@ -230,18 +230,24 @@ def get_info(obj, attr_dict_list: list):
                         cat_list: category list to display (if relevant)
     :return: 1 if successful, else 0 if user quites
     """
-
     for attr_dict in attr_dict_list:
+        # If multiselect, turn into list and prompt for more responses
+        try:
+            if attr_dict["multiselect"]:
+                value_list = []
+        except KeyError:
+            pass
+
         while True:
             # If there is a category list entered, display the options before allowing selection.
             try:
                 print_cat_value(attr_dict["cat_list"], f"Select a {attr_dict['term']}:")
 
             except KeyError:
-                pass
+                print(f"Select a {attr_dict['term']}: \n")
 
             # Prompt user with user-friendly text, then return value until
-            value = qu_input(f"\n{attr_dict['term']}: ")
+            value = qu_input(f"\nSelection: ")
 
             if not value:
                 if yes_or_no("You have left this information blank. Would you like to quit? "):
@@ -250,8 +256,30 @@ def get_info(obj, attr_dict_list: list):
                 else:
                     continue
 
+            # For multiselect items, continue to ask for additional values
             try:
-                setattr(obj, attr_dict["attr"], value)
+                if attr_dict["multiselect"]:
+                    if value not in value_list:
+                        value_list.append(value)
+
+                    else:
+                        print(f"Value already in list.")
+
+                    if validate.yes_or_no("Add another value? "):
+                        continue
+
+            except KeyError:
+                pass
+
+            # Set the attribute (from the list if multiselect, else the value string)
+            try:
+                try:
+                    if attr_dict["multiselect"]:
+                        setattr(obj, attr_dict["attr"], value_list)
+
+                except KeyError:
+                    setattr(obj, attr_dict["attr"], value)
+
                 break
 
             except ValueError as err:

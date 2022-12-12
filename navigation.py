@@ -4,6 +4,7 @@ import in_out
 import validate
 import geolocation
 import os
+import classes
 
 
 def clear():
@@ -42,6 +43,13 @@ def main_menu(class_list):
         elif selection == "2":
             obj_menu(class_list)
             continue
+
+        # TODO: Remove before deployment
+        elif selection == "dev":
+            in_out.import_csv(classes.team.Team, "./investigation/team_import.csv")
+            in_out.import_csv(classes.person.Patient, "./investigation/pat_import.csv")
+            in_out.import_csv(classes.person.Clinician, "./investigation/clin_import.csv")
+            in_out.import_csv(classes.visits.Visit, "./investigation/visit_import.csv")
 
         else:
             print("Invalid selection.")
@@ -207,23 +215,19 @@ def geo_feat():
               "    1) Clinician Optimizer\n"
               "    2) Team Optimizer\n")
 
-        try:
+        selection = validate.qu_input("Selection: ")
 
-            selection = validate.qu_input("Selection: ")
+        if not selection:
+            return 0
 
-            if not selection:
-                return 0
+        elif selection == "1":
+            geolocation.optimize_trip()
+            continue
 
-            elif selection == "1":
-                geolocation.optimize_trip()
-                continue
+        elif selection == "2":
+            geolocation.optimize_team()
+            continue
 
-            elif selection == "2":
-                geolocation.optimize_team()
-                continue
+        else:
+            print("Invalid selection.")
 
-            else:
-                print("Invalid selection.")
-
-        except TypeError:
-            print("Please select an option by number from the list above.\n")

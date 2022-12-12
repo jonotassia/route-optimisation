@@ -211,7 +211,7 @@ def export_csv(cls):
             print("File not found. Ensure the input file contains '.csv' at the end.")
 
 
-def import_csv(cls):
+def import_csv(cls, filepath=None):
     """
     Reads a file from csv and saves them as objects.
     :param cls: Class of object(s) to be created.
@@ -221,12 +221,16 @@ def import_csv(cls):
     # TODO: Make sure this matches on ID before it imports
     while True:
         try:
-            filepath = validate.qu_input("Enter a csv file location to load the file: ")
+            # If filepath not passed through, prompt user input
+            if not filepath:
+                filepath = validate.qu_input("Enter a csv file location to load the file: ")
 
+            # If still blank, exit
             if not filepath:
                 return 0
 
             import_data = pd.read_csv(filepath)
+            import_data = import_data.fillna(0)
             data_dict_list = import_data.to_dict("records")
 
             # Loop through each dict from the import and initialize + save a new object

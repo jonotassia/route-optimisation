@@ -1,8 +1,0 @@
-pat_id,status,sched_status,time_earliest,time_latest,exp_date
-10001,1,unscheduled,800,1700,6/12/2022
-10003,1,unscheduled,800,1700,6/12/2022
-10005,1,unscheduled,800,1700,6/12/2022
-10007,1,unscheduled,800,1700,6/12/2022
-10009,1,unscheduled,800,1700,6/12/2022
-10011,1,unscheduled,800,1700,6/12/2022
-10013,1,unscheduled,800,1700,6/12/2022

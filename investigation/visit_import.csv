@@ -1,0 +1,9 @@
+pat_id,status,sched_status,time_earliest,time_latest,exp_date,visit_complexity,visit_priority,skill_list,discipline
+10001,1,unscheduled,800,1000,20/12/2022,Complex,2,1,Nurse
+10002,1,unscheduled,900,1100,20/12/2022,0,Red,,Nurse
+10003,1,unscheduled,1200,1400,20/12/2022,routine,green,2,
+10004,1,unscheduled,800,1700,20/12/2022,Routine,0,"0, 1",
+10001,1,unscheduled,1500,1600,20/12/2022,1,1,,Physical Therapist
+10006,1,unscheduled,1200,1300,20/12/2022,Simple,2,"domestic tasks
+Physical assessment",Physical Therapist
+10006,1,unscheduled,1100,1200,20/12/2022,routine,1,"0, specimen collection",Nurse
