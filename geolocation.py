@@ -506,14 +506,21 @@ def create_dist_matrix(plus_code_list):
 
             # Perform dict comprehension to pass a single dictionary to builder function
             comb_response = {key: comb_response[key] + response.json()[key] for key in comb_response}
-            # Consolidate rows from remainder with rows from num_col_query
-            if num_column_query:
-                for index in range(num_column_query):
-                    comb_response["rows"][index]["elements"] = comb_response["rows"][index]["elements"] + comb_response["rows"][index+rows_per_send]["elements"]
 
-                    # [comb_response["rows"][i]["elements"] +
-                    #                      comb_response["rows"][i+rows_per_send]["elements"]
-                    #                      for i in range(rows_per_send)]
+        # Consolidate rows from remainder with rows from num_col_query
+        if num_column_query:
+            # Hold index constant, then consolidate every nth column into the same row of the response,
+            # where i is denominations of rows_per_send up to rows_per_send * column query + index
+            # Example: If you have 3 different rows generated from num_column_query + remaining_cols,
+            # Index 0 should be row 0 + row 3, index 1 should be row 1 + row 4, and so on
+            for index in range(rows_per_send):
+                for step_index in range(index + rows_per_send,
+                                        rows_per_send * num_column_query + index + rows_per_send,
+                                        rows_per_send):
+                    comb_response["rows"][index]["elements"] += comb_response["rows"][step_index]["elements"]
+
+            # Delete excess rows
+            del comb_response["rows"][rows_per_send:]
 
         distance_matrix[i * rows_per_send: (i + 1) * rows_per_send] = build_dist_matrix(comb_response)
 
@@ -559,9 +566,16 @@ def create_dist_matrix(plus_code_list):
                 return 0
 
             comb_response = {key: comb_response[key] + response.json()[key] for key in comb_response}
-            if num_column_query:
-                for index in range(num_column_query):
-                    comb_response["rows"][index]["elements"] = comb_response["rows"][index]["elements"] + comb_response["rows"][index+rows_per_send]["elements"]
+
+        # Consolidate rows from remainder with rows from num_col_query
+        for index in range(remaining_rows):
+            for step_index in range(index + remaining_rows,
+                                    remaining_rows * num_column_query + index + remaining_rows,
+                                    remaining_rows):
+                comb_response["rows"][index]["elements"] += comb_response["rows"][step_index]["elements"]
+
+        # Delete excess rows
+        del comb_response["rows"][remaining_rows:]
 
         distance_matrix[rows_per_send * num_row_query: rows_per_send * num_row_query + remaining_rows] = build_dist_matrix(
             comb_response)
@@ -599,7 +613,7 @@ def build_dist_matrix(response):
 
     for row in response['rows']:
         # Loop through each element in the rows of the response and populate a list of each value
-        row_list = [int(row["elements"][i]['duration']['value'] / 60) for i in range(len(row))]
+        row_list = [int(row["elements"][i]['duration']['value'] / 60) for i in range(len(row["elements"]))]
 
         # Add row list to the array
         distance_matrix.append(row_list)
@@ -769,10 +783,11 @@ def print_to_screen(clin_index, clin, visits, n_start_list, manager, routing, so
         visit = visits[manager.IndexToNode(index) - n_start_list]
         # Get time window for each location
         time_var = time_dimension.CumulVar(index)
-        leave_by = datetime.time(minute=solution.Max(time_var))
+        start_hours, start_min = divmod(solution.Min(time_var), 60)
+        end_hours, end_min = divmod(solution.Max(time_var), 60)
         plan_output += f'  {visit.patient_name} ' \
-                       f'(Start by: {visit._time_earliest.strftime("%H:%M")}, ' \
-                       f'Leave by: {str(leave_by)}) ->'
+                       f'(Start by: {datetime.time(hour=start_hours, minute=start_min).strftime("%H%M")}, ' \
+                       f'Leave by: {datetime.time(hour=end_hours, minute=end_min).strftime("%H%M")}) ->'
         index = solution.Value(routing.NextVar(index))
 
     # Add final index
@@ -816,12 +831,13 @@ def print_to_table(clin_index, clin, visits, n_start_list, manager, routing, sol
         visit = visits[manager.IndexToNode(index) - n_start_list]
         # Get time window for each location
         time_var = time_dimension.CumulVar(index)
-        leave_by = datetime.timedelta(minutes=solution.Max(time_var))
+        start_hours, start_min = divmod(solution.Min(time_var), 60)
+        end_hours, end_min = divmod(solution.Max(time_var), 60)
         solutions_dict[visit.id] = {
             "Clinician": clin.name,
             "Patient Name": visit.patient_name,
-            "Start By": visit.time_earliest,
-            "Leave By": leave_by,
+            "Start By": datetime.time(hour=start_hours, minute=start_min).strftime("%H%M"),
+            "Leave By": datetime.time(hour=end_hours, minute=end_min).strftime("%H%M"),
             "Priority": visit.visit_priority,
             "Complexity": visit.visit_complexity,
             "Skills Required": visit.skill_list,
