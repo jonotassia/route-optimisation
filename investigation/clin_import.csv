@@ -1,3 +1,5 @@
 status,name,dob,sex,address,team,start_time,end_time,discipline,skill_list
-1,"Jimmy, Timmy",18/10/1994,male,1805 12TH AVE SEATTLE WA 98119-2978 USA,10000,600,1400,Nurse,"0, 1"
+1,"Jimmy, Timmy",18/10/1994,male,1805 12TH AVE SEATTLE WA 98119-2978 USA,10000,600,1400,Nurse,"1, 2"
 1,"Ronnie, Bonnie",18/10/1994,female,7500 8TH AVE SEATTLE WA 98106-2087 USA,10000,1000,1800,Physical Therapist,physical assessment
+1,"Jammy, Hammy",18/10/1995,female,3601 SW ROXBURY ST SEATTLE WA 98126-4028 USA,10000,1200,2200,5,"2, 3"
+1,"Zommy, Tommy",18/10/1994,male,4601 SW MONROE ST SEATTLE WA 98136-2241 USA,10000,1100,1700,Nurse,"1, 2"
