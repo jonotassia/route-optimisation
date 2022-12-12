@@ -82,11 +82,12 @@ def optimize_trip(clin_id=""):
         sleep(2)
         return 0
 
-    # Assign and print all nodes that could not be visited
-    dropped_nodes = (node for node in range(routing.Size())
-                     if solution.Value(routing.NextVar(node)) == node
-                     and not routing.IsStart(node)
-                     and not routing.IsEnd(node))
+    # Find all nodes that could not be visited and their penalties
+    dropped_nodes = {}
+
+    for node in range(routing.Size()):
+        if solution.Value(routing.NextVar(node)) == node and not routing.IsStart(node) and not routing.IsEnd(node):
+            dropped_nodes[node] = "Skill/Discipline Mismatch" if routing.GetDisjunctionPenalty(node) < 1 else "Time Window Mismatch"
 
     # Create optimal route order and assign to each clinician. Pass clin as list for proper handling
     rt_detail = return_solution([clin], visits, len(data_dict["start_list"]),
@@ -450,51 +451,120 @@ def create_dist_matrix(plus_code_list):
 
     # Define constraints for creating distance matrix - maximum 100 elements per query based on num origins and dests
     max_elements = 100
+    max_cols = 25
     num_addresses = len(plus_code_list)
     rows_per_send = max_elements // num_addresses
 
-    # Evaluate number of queries required
-    num_queries, remaining_rows = divmod(num_addresses, rows_per_send)
+    # Evaluate number of queries required.
+    num_row_query, remaining_rows = divmod(num_addresses, rows_per_send)
+    num_column_query, remaining_cols = divmod(num_addresses, max_cols)
 
     # Create distance matrix with Distance Matrix API - https://developers.google.com/maps/documentation/distance-matrix
     distance_matrix = np.empty((num_addresses, num_addresses), dtype="int")
 
     # Send sets of addresses in chunks equal to num_queries
-    for i in range(num_queries):
+    for i in range(num_row_query):
         origin_addresses = plus_code_list[i * rows_per_send: (i + 1) * rows_per_send]
+        # Maximum number of columns is 25, so split up queries by column as well. These will be merged into a single
+        # dictionary before passing to dist matrix builder function
+        comb_response = {
+            "destination_addresses": [],
+            "origin_addresses": [],
+            "rows": []
+        }
+        for j in range(num_column_query):
+            destination_addresses = plus_code_list[j*max_cols:(j+1)*max_cols]
+            # Prepare URL for GET request
+            url = "https://maps.googleapis.com/maps/api/distancematrix/json?units=imperial"
+            origins = "|".join(origin_addresses).replace(" ", "%20B").replace("+", "%2B")
+            destinations = "|".join(destination_addresses).replace(" ", "%20B").replace("+", "%2B")
 
-        # Prepare URL for GET request
-        url = "https://maps.googleapis.com/maps/api/distancematrix/json?units=imperial"
-        origins = "|".join(origin_addresses).replace(" ", "%20B").replace("+", "%2B")
-        destinations = "|".join(plus_code_list).replace(" ", "%20B").replace("+", "%2B")
+            url = url + '&origins=' + origins + '&destinations=' + destinations + '&mode=' + mode + '&key=' + google_api_key
 
-        url = url + '&origins=' + origins + '&destinations=' + destinations + '&mode=' + mode + '&key=' + google_api_key
+            response = query_dist_matrix(url)
 
-        response = query_dist_matrix(url)
+            if not response:
+                return 0
 
-        if not response:
-            return 0
+            # Perform dict comprehension to pass a single dictionary to builder function
+            comb_response = {key: comb_response[key] + response.json()[key] for key in comb_response}
 
-        distance_matrix[i * rows_per_send: (i + 1) * rows_per_send] = build_dist_matrix(response.json())
+        # Send remaining columns
+        if remaining_cols > 0:
+            destination_addresses = plus_code_list[num_column_query*max_cols:num_column_query*max_cols+remaining_cols]
+            # Prepare URL for GET request
+            url = "https://maps.googleapis.com/maps/api/distancematrix/json?units=imperial"
+            origins = "|".join(origin_addresses).replace(" ", "%20B").replace("+", "%2B")
+            destinations = "|".join(destination_addresses).replace(" ", "%20B").replace("+", "%2B")
+
+            url = url + '&origins=' + origins + '&destinations=' + destinations + '&mode=' + mode + '&key=' + google_api_key
+
+            response = query_dist_matrix(url)
+
+            if not response:
+                return 0
+
+            # Perform dict comprehension to pass a single dictionary to builder function
+            comb_response = {key: comb_response[key] + response.json()[key] for key in comb_response}
+            # Consolidate rows from remainder with rows from num_col_query
+            if num_column_query:
+                for index in range(num_column_query):
+                    comb_response["rows"][index]["elements"] = comb_response["rows"][index]["elements"] + comb_response["rows"][index+rows_per_send]["elements"]
+
+                    # [comb_response["rows"][i]["elements"] +
+                    #                      comb_response["rows"][i+rows_per_send]["elements"]
+                    #                      for i in range(rows_per_send)]
+
+        distance_matrix[i * rows_per_send: (i + 1) * rows_per_send] = build_dist_matrix(comb_response)
 
     # Send remaining rows
     if remaining_rows > 0:
-        origin_addresses = plus_code_list[rows_per_send * num_queries: rows_per_send * num_queries + remaining_rows]
+        origin_addresses = plus_code_list[rows_per_send * num_row_query: rows_per_send * num_row_query + remaining_rows]
+        # Send remaining columns for rows
+        comb_response = {
+            "destination_addresses": [],
+            "origin_addresses": [],
+            "rows": []
+        }
+        for j in range(num_column_query):
+            destination_addresses = plus_code_list[j * max_cols:(j + 1) * max_cols]
 
-        # Prepare URL for GET request
-        url = "https://maps.googleapis.com/maps/api/distancematrix/json?units=imperial"
-        origins = "|".join(origin_addresses).replace(" ", "%20B").replace("+", "%2B")
-        destinations = "|".join(plus_code_list).replace(" ", "%20B").replace("+", "%2B")
+            # Prepare URL for GET request
+            url = "https://maps.googleapis.com/maps/api/distancematrix/json?units=imperial"
+            origins = "|".join(origin_addresses).replace(" ", "%20B").replace("+", "%2B")
+            destinations = "|".join(destination_addresses).replace(" ", "%20B").replace("+", "%2B")
 
-        url = url + '&origins=' + origins + '&destinations=' + destinations + '&mode=' + mode + '&key=' + google_api_key
+            url = url + '&origins=' + origins + '&destinations=' + destinations + '&mode=' + mode + '&key=' + google_api_key
 
-        response = query_dist_matrix(url)
+            response = query_dist_matrix(url)
 
-        if not response:
-            return 0
+            if not response:
+                return 0
 
-        distance_matrix[rows_per_send * num_queries: rows_per_send * num_queries + remaining_rows] = build_dist_matrix(
-            response.json())
+            comb_response = {key: comb_response[key] + response.json()[key] for key in comb_response}
+
+        # Send remaining columns
+        if remaining_cols > 0:
+            destination_addresses = plus_code_list[num_column_query*max_cols:num_column_query*max_cols+remaining_cols]
+            # Prepare URL for GET request
+            url = "https://maps.googleapis.com/maps/api/distancematrix/json?units=imperial"
+            origins = "|".join(origin_addresses).replace(" ", "%20B").replace("+", "%2B")
+            destinations = "|".join(destination_addresses).replace(" ", "%20B").replace("+", "%2B")
+
+            url = url + '&origins=' + origins + '&destinations=' + destinations + '&mode=' + mode + '&key=' + google_api_key
+
+            response = query_dist_matrix(url)
+
+            if not response:
+                return 0
+
+            comb_response = {key: comb_response[key] + response.json()[key] for key in comb_response}
+            if num_column_query:
+                for index in range(num_column_query):
+                    comb_response["rows"][index]["elements"] = comb_response["rows"][index]["elements"] + comb_response["rows"][index+rows_per_send]["elements"]
+
+        distance_matrix[rows_per_send * num_row_query: rows_per_send * num_row_query + remaining_rows] = build_dist_matrix(
+            comb_response)
 
     return distance_matrix
 
@@ -529,7 +599,7 @@ def build_dist_matrix(response):
 
     for row in response['rows']:
         # Loop through each element in the rows of the response and populate a list of each value
-        row_list = [int(row['elements'][i]['duration']['value'] / 60) for i in range(len(row["elements"]))]
+        row_list = [int(row["elements"][i]['duration']['value'] / 60) for i in range(len(row))]
 
         # Add row list to the array
         distance_matrix.append(row_list)
@@ -699,10 +769,10 @@ def print_to_screen(clin_index, clin, visits, n_start_list, manager, routing, so
         visit = visits[manager.IndexToNode(index) - n_start_list]
         # Get time window for each location
         time_var = time_dimension.CumulVar(index)
-        leave_by = datetime.timedelta(minutes=solution.Max(time_var))
+        leave_by = datetime.time(minute=solution.Max(time_var))
         plan_output += f'  {visit.patient_name} ' \
                        f'(Start by: {visit._time_earliest.strftime("%H:%M")}, ' \
-                       f'Leave by: {str(leave_by).rstrip(":")}) ->'
+                       f'Leave by: {str(leave_by)}) ->'
         index = solution.Value(routing.NextVar(index))
 
     # Add final index
