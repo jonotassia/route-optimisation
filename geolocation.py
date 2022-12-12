@@ -74,7 +74,8 @@ def optimize_trip(clin_id=""):
     manager, routing, solution = route_optimizer(dist_matrix, 1, data_dict["start_list"],
                                                  data_dict["end_list"], data_dict["time_windows"],
                                                  data_dict["capacities"], data_dict["weights"],
-                                                 data_dict["priorities"])
+                                                 data_dict["priorities"], data_dict["skills"],
+                                                 data_dict["disc"])
 
     if not solution:
         print("No solution found. Returning...")
@@ -171,18 +172,20 @@ def optimize_team(team_id=""):
     manager, routing, solution = route_optimizer(dist_matrix, team.team_size, data_dict["start_list"],
                                                  data_dict["end_list"], data_dict["time_windows"],
                                                  data_dict["capacities"], data_dict["weights"],
-                                                 data_dict["priorities"])
+                                                 data_dict["priorities"], data_dict["skills"],
+                                                 data_dict["disc"])
 
     if not solution:
         print("No solution found. Returning...")
         sleep(2)
         return 0
 
-    # Find all nodes that could not be visited
-    dropped_nodes = (node for node in range(routing.Size())
-                     if solution.Value(routing.NextVar(node)) == node
-                     and not routing.IsStart(node)
-                     and not routing.IsEnd(node))
+    # Find all nodes that could not be visited and their penalties
+    dropped_nodes = {}
+
+    for node in range(routing.Size()):
+        if solution.Value(routing.NextVar(node)) == node and not routing.IsStart(node) and not routing.IsEnd(node):
+            dropped_nodes[node] = "Skill/Discipline Mismatch" if routing.GetDisjunctionPenalty(node) < 1 else "Time Window Mismatch"
 
     # Create optimal route order and assign to each clinician
     rt_detail = return_solution(clins, team_visits, len(data_dict["start_list"]),
@@ -244,6 +247,16 @@ def generate_data(visits, clins):
     visit_priorities = [(visit._c_visit_priority.index(visit._visit_priority) + 1) ** 4 for visit in visits]
     priorities = [0] * len(start_list) + visit_priorities + [0] * len(end_list)
 
+    # Get clinician and visit skills
+    clin_skills = [clin._skill_list for clin in clins]
+    visit_skills = [visit._skill_list for visit in visits]
+    skills = clin_skills + visit_skills
+
+    # Get disciplines for visit
+    clin_disc = [clin._discipline for clin in clins]
+    visit_disc = [visit._discipline for visit in visits]
+    disc = clin_disc + visit_disc
+
     data_dict = {
         "plus_code_list": plus_code_list,
         "start_list": start_indices,
@@ -251,14 +264,17 @@ def generate_data(visits, clins):
         "time_windows": time_windows,
         "capacities": capacities,
         "weights": weights,
-        "priorities": priorities
+        "priorities": priorities,
+        "skills": skills,
+        "disc": disc
     }
 
     return data_dict
 
 
 def route_optimizer(dist_matrix, num_clinicians, start_list, end_list,
-                    time_windows, capacities, weights, priorities):
+                    time_windows, capacities, weights, priorities,
+                    skills, discipline):
     """
     Passes locations through route optimizer to generate optimal route solution.
     :param dist_matrix: A matrix outlining the amount of time required to transit to each location
@@ -269,6 +285,8 @@ def route_optimizer(dist_matrix, num_clinicians, start_list, end_list,
     :param capacities: A numeric representation of the max weight (AKA complexity) a clinician can complete in a day
     :param weights: The weight of a visit, derived from visit complexity
     :param priorities: A numeric representation of visit priority. Determines which visits should be dropped first
+    :param skills: Skills posessed by clinicians and skills required for visits
+    :param discipline: The discipline of the clinician and the discipline required for visits
     :return: Optimized solution
     """
     # Create index/routing manager - location number corresponds to index in distance matrix (0 = start, last = end)
@@ -343,7 +361,7 @@ def route_optimizer(dist_matrix, num_clinicians, start_list, end_list,
         "Capacity"
     )
 
-    # Set limits on weight per day. Minumum is 80% of max constraints
+    # Set limits on weight per day. Minimum is 80% of max constraints
     # This will accumulate over each visit
     capacity_dimension = routing.GetDimensionOrDie(dimension_name="Capacity")
     for clin in range(num_clinicians):
@@ -358,6 +376,38 @@ def route_optimizer(dist_matrix, num_clinicians, start_list, end_list,
     for node in range(len(start_list), len(dist_matrix) - len(end_list)):
         # Each node is made a disjunction so that it is an optional visit. "Red" visits will not be optional
         routing.AddDisjunction([manager.NodeToIndex(node)], priorities[node])
+
+    # Set up disjunction list for visits whose skills do not match with any clinicians.
+    # Each number is the number of the NODE that will be disjuncted
+    skill_disj_list = []
+
+    # Set up discipline and skill constraints. Loop over visit portion of list.
+    for location_index, visit_skill_disc in enumerate(list(zip(skills, discipline))[num_clinicians:]):
+        # Adjust index based on number of clinicians to only be visit locations. Initialize allowed vehicle list
+        location_index = location_index + num_clinicians
+        allow_list = []
+        # Loop over clinician skills and discs. If skills and disciplines match visit or are none/any, add to allow list
+        for clin_index, clin_skill_disc in enumerate(list(zip(skills, discipline))[:num_clinicians]):
+            # If the discipline or the skills are not specified in the visit, add to list
+            if not visit_skill_disc[0]:
+                allow_list.append(clin_index)
+            elif visit_skill_disc[1] == "any":
+                allow_list.append(clin_index)
+            # If the discipline matches and the clinician isn't missing any skills for the visit, add to list
+            elif visit_skill_disc[1] == clin_skill_disc[1]:
+                for skill in visit_skill_disc[0]:
+                    if skill not in clin_skill_disc[0]:
+                        continue
+                allow_list.append(clin_index)
+        # Set the location index as allowed for anything in the allow list
+        if allow_list:
+            routing.SetAllowedVehiclesForIndex(allow_list, manager.NodeToIndex(location_index))
+        else:
+            skill_disj_list.append(location_index)
+
+    # Add a mandatory disjunctions to skip any visit that does not have matching skills or disc
+    for node in skill_disj_list:
+        routing.AddDisjunction([manager.NodeToIndex(node)], -1)
 
     # Set the search parameters and a heuristic for initial solution (prioritize cheapest arc - ie least transit time)
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
@@ -517,9 +567,12 @@ def return_solution(clins, visits, n_start_list, dropped_nodes, manager, routing
         # Print dropped nodes
         print(f"The following patients could not be seen: ")
         for node in dropped_nodes:
+            disj_reason = dropped_nodes[node]
+            node = node - n_start_list
             print(
                 f"{node}) {visits[node].patient_name}: {visits[node].time_earliest} - {visits[node].time_latest}, "
-                f"Priority: {visits[node].visit_priority}, Complexity: {visits[node].visit_complexity}")
+                f"Priority: {visits[node].visit_priority}, Complexity: {visits[node].visit_complexity}, "
+                f"Disjunction Reason: {disj_reason}")
 
         for clin_index, clin in enumerate(clins):
             print_to_screen(clin_index, clin, visits, n_start_list, manager, routing, solution)
@@ -542,6 +595,8 @@ def return_solution(clins, visits, n_start_list, dropped_nodes, manager, routing
         # Generate a dict of all visits that could not be undertaken for this team
         dropped_nodes_dict = {}
         for node in dropped_nodes:
+            disj_reason = dropped_nodes[node]
+            node = node - n_start_list
             dropped_nodes_dict[visits[node].id] = {
                 "Clinician": "UNASSIGNED",
                 "Patient Name": visits[node].patient_name,
@@ -550,15 +605,18 @@ def return_solution(clins, visits, n_start_list, dropped_nodes, manager, routing
                 "Priority": visits[node].visit_priority,
                 "Complexity": visits[node].visit_complexity,
                 "Skills Required": visits[node].skill_list,
+                "Discipline Requested": visits[node].discipline,
                 "Address": visits[node].address,
-                "Driving Time": "N/A"
+                "Driving Time": "N/A",
+                "Disjunction Reason": disj_reason
             }
         # Convert and display dropped nodes dataframe
         dropped_nodes_df = pd.DataFrame.from_dict(dropped_nodes_dict, orient="index")
 
         # Initialize a solutions dataframe and add dropped nodes to it
         solution_df = pandas.DataFrame(columns=["Clinician", "Patient Name", "Start By", "Leave By", "Priority",
-                                                "Complexity", "Skills Required", "Address", "Driving Time"])
+                                                "Complexity", "Skills Required", "Discipline Requested", "Address",
+                                                "Driving Time", "Disjunction Reason"])
         solution_df = pd.concat([solution_df, dropped_nodes_df])
 
         for clin_index, clin in enumerate(clins):
@@ -697,8 +755,10 @@ def print_to_table(clin_index, clin, visits, n_start_list, manager, routing, sol
             "Priority": visit.visit_priority,
             "Complexity": visit.visit_complexity,
             "Skills Required": visit.skill_list,
+            "Discipline Requested": visit.discipline,
             "Address": visit.address,
-            "Driving Time": int(solution.Min(time_var) / 60)
+            "Driving Time": int(solution.Min(time_var) / 60),
+            "Disjunction Reason": "N/A"
         }
         index = solution.Value(routing.NextVar(index))
 

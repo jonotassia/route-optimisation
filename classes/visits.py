@@ -134,10 +134,11 @@ class Visit:
             old_clin_id = self._clin_id
 
             # Remove from old clinician if there is one
-            if old_clin_id != value:
-                old_clin = in_out.load_obj(classes.person.Patient, f"./data/Clinician/{old_clin_id}.pkl")
-                old_clin.visits[self.exp_date].remove(self.id)
-                old_clin.write_self()
+            if old_clin_id:
+                if old_clin_id != value:
+                    old_clin = in_out.load_obj(classes.person.Patient, f"./data/Clinician/{old_clin_id}.pkl")
+                    old_clin.visits[self.exp_date].remove(self.id)
+                    old_clin.write_self()
 
             clin = in_out.load_obj(classes.person.Patient, f"./data/Clinician/{value}.pkl")
 

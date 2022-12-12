@@ -638,7 +638,7 @@ class Clinician(Human):
     _tracked_instances = {}
     _c_inactive_reason = ("no longer works here", "switched roles", "added in error")
     _c_skill_list = ("med administration", "specimen collection", "domestic tasks", "physical assessment")
-    _c_discipline = ("doctor", "nurse", "physical Therapist", "occupational Therapist", "medical assistant")
+    _c_discipline = ("doctor", "nurse", "physical therapist", "occupational Therapist", "medical assistant")
 
     def __init__(self, status=1, name="", dob="", sex="", address="",
                  team="", start_time="800", end_time="1700", discipline=None,
