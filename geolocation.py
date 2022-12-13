@@ -87,7 +87,7 @@ def optimize_trip(clin_id=""):
 
     for node in range(routing.Size()):
         if solution.Value(routing.NextVar(node)) == node and not routing.IsStart(node) and not routing.IsEnd(node):
-            dropped_nodes[node] = "Skill/Discipline Mismatch" if routing.GetDisjunctionPenalty(node) < 1 else "Time Window Mismatch"
+            dropped_nodes[node] = "Skill/Discipline Mismatch" if routing.GetDisjunctionMaxCardinality(node) <= 1 else "Time Window Mismatch"
 
     # Create optimal route order and assign to each clinician. Pass clin as list for proper handling
     rt_detail = return_solution([clin], visits, len(data_dict["start_list"]),
@@ -245,7 +245,7 @@ def generate_data(visits, clins):
 
     # Get priority information, which is numerically represented as priority index ^4 in order to significantly
     # punish for missing a "Red" visit
-    visit_priorities = [(visit._c_visit_priority.index(visit._visit_priority) + 1) ** 4 for visit in visits]
+    visit_priorities = [(visit._c_visit_priority.index(visit._visit_priority) + 3) ** 4 for visit in visits]
     priorities = [0] * len(start_list) + visit_priorities + [0] * len(end_list)
 
     # Get clinician and visit skills
@@ -342,6 +342,20 @@ def route_optimizer(dist_matrix, num_clinicians, start_list, end_list,
     # Enable the routing function to use this transit time as its arc cost measurement
     routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
 
+    # Establish counting dimension to track number of nodes visited (used for fair breakdown of visits)
+    routing.AddConstantDimension(
+        1,
+        len(weights),  # Analog for total number of visits
+        True,
+        "count"
+    )
+
+    # Set minimum threshold for number of visits so that every clinician must see patients
+    count_dimension = routing.GetDimensionOrDie("count")
+    for clin in range(num_clinicians):
+        index_end = routing.End(clin)
+        count_dimension.SetCumulVarSoftLowerBound(index_end, int(0.8*num_clinicians//len(priorities)), 100)
+
     def demand_callback(from_index):
         """
         Returns the demand of the node.
@@ -390,16 +404,19 @@ def route_optimizer(dist_matrix, num_clinicians, start_list, end_list,
         # Loop over clinician skills and discs. If skills and disciplines match visit or are none/any, add to allow list
         for clin_index, clin_skill_disc in enumerate(list(zip(skills, discipline))[:num_clinicians]):
             # If the discipline or the skills are not specified in the visit, add to list
-            if not visit_skill_disc[0]:
-                allow_list.append(clin_index)
-            elif visit_skill_disc[1] == "any":
+            if not visit_skill_disc[0] and visit_skill_disc[1] == "any":
                 allow_list.append(clin_index)
             # If the discipline matches and the clinician isn't missing any skills for the visit, add to list
-            elif visit_skill_disc[1] == clin_skill_disc[1]:
-                for skill in visit_skill_disc[0]:
-                    if skill not in clin_skill_disc[0]:
-                        continue
-                allow_list.append(clin_index)
+            elif visit_skill_disc[1] == clin_skill_disc[1] or visit_skill_disc[1] == "any":
+                if visit_skill_disc[0]:
+                    for skill in visit_skill_disc[0]:
+                        if skill not in clin_skill_disc[0]:
+                            break
+                        # If skill is final index of list, add to the allow list
+                        elif skill == visit_skill_disc[0][-1]:
+                            allow_list.append(clin_index)
+                else:
+                    allow_list.append(clin_index)
         # Set the location index as allowed for anything in the allow list
         if allow_list:
             routing.SetAllowedVehiclesForIndex(allow_list, manager.NodeToIndex(location_index))
@@ -407,12 +424,15 @@ def route_optimizer(dist_matrix, num_clinicians, start_list, end_list,
             skill_disj_list.append(location_index)
 
     # Add a mandatory disjunctions to skip any visit that does not have matching skills or disc
-    for node in skill_disj_list:
-        routing.AddDisjunction([manager.NodeToIndex(node)], -1)
+    routing.AddDisjunction([manager.NodeToIndex(node) for node in skill_disj_list], -1, 1)
 
     # Set the search parameters and a heuristic for initial solution (prioritize cheapest arc - ie least transit time)
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
     search_parameters.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
+
+    search_parameters.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
+    search_parameters.log_search = True  # to get some logs
+    search_parameters.time_limit.seconds = 1
 
     # Solve the problem and print the solution
     solution = routing.SolveWithParameters(search_parameters)
