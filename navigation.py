@@ -213,7 +213,8 @@ def geo_feat():
 
         print("Please select an option from the list below:\n"
               "    1) Clinician Optimizer\n"
-              "    2) Team Optimizer\n")
+              "    2) Team Optimizer\n"
+              "    3) Display Route\n")
 
         selection = validate.qu_input("Selection: ")
 
@@ -221,11 +222,33 @@ def geo_feat():
             return 0
 
         elif selection == "1":
-            geolocation.optimize_trip()
+            geolocation.optimize_route()
             continue
 
         elif selection == "2":
             geolocation.optimize_team()
+            continue
+
+        elif selection == "3":
+            # Prompt user for which type of record to load
+            print("For which of the following would you like to display the route?:\n"
+                  "     1) Clinician\n"
+                  "     2) Team\n")
+
+            selection = -1
+            while selection not in ["1", "2"]:
+                selection = validate.qu_input("Selection: ")
+
+                if not selection:
+                    return 0
+
+            if selection == "1":
+                obj = classes.person.Clinician.load_self()
+
+            if selection == "2":
+                obj = classes.team.Team.load_self()
+
+            geolocation.display_route(obj)
             continue
 
         else:

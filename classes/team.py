@@ -1,5 +1,7 @@
 # This file contains the Visit class to be used in the route optimisation tool.
 import itertools
+
+import geolocation
 import validate
 import in_out
 import classes
@@ -98,7 +100,9 @@ class Team:
             selection = validate.qu_input("What would you like to do:\n"
                                           "     1. Update Name\n"
                                           "     2. Update Address\n"
-                                          "     3. Inactivate Record\n"
+                                          "     3. Optimize Route\n"
+                                          "     4. Display Route\n"
+                                          "     5. Inactivate Record\n"
                                           "\n"
                                           "Selection: ")
 
@@ -113,8 +117,16 @@ class Team:
             elif selection == "2":
                 self.update_address()
 
-            # Inactivate record
+            # Optimize route
             elif selection == "3":
+                self.optimize_route()
+
+            # display route
+            elif selection == "4":
+                self.display_route()
+
+            # Inactivate record
+            elif selection == "5":
                 self.inactivate_self()
                 return 0
 
@@ -306,8 +318,11 @@ class Team:
 
         return 1
 
-    def assign_routes(self):
-        """Considers availability of all Patient and number of Visit to book and allocates appropriately"""
-        pass
+    def optimize_route(self):
+        """Calculates the estimated route for all clinicians on the team."""
+        geolocation.optimize_team(team_id=self.id)
 
+    def display_route(self):
+        """Displays the route for all clinicians on the team."""
+        geolocation.display_route(self.id)
     # TODO: Add a class method to reactivate a record
