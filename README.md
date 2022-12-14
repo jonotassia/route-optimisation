@@ -25,7 +25,7 @@ Steps to optimize route:
     3. If a visit must be missed due to resource constraints, the algorithm MUST prioritise any visits that are rated as a "Red" (AKA urgent) visit
 4. The system saves the sequenced routes to each clinician and outputs to screen or file, based on user input.
 
-![image](https://user-images.githubusercontent.com/24849659/206609866-7df57930-bcee-41e7-9533-c9be50e37d9d.png)
+![image](https://user-images.githubusercontent.com/24849659/207723170-d5ad772b-34bc-46ed-8089-375ce298b238.png)
 
 ## Visualisation
 Once a route has been optimized, users can plot the output using Folium. The shortest route between each OpenStreetMaps node is calculated using OSMNX and NetworkX.
