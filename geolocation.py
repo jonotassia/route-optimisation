@@ -1,22 +1,23 @@
 # Contains functions related to geolocation using Placekey and mlrose
-import pandas
+import folium
+from folium import plugins
+import osmnx as ox
+import networkx as nx
 import pandas as pd
-
-import in_out
-import classes
 import numpy as np
 import validate
 import navigation
+import in_out
+import classes
 import boto3
 import requests
 from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
-import googlemaps
 import datetime
 from time import sleep
 
 
-def optimize_trip(clin_id=""):
+def optimize_route(clin_id=""):
     """
     Optimizes a single clinician's schedule for the day based on distance traveled for all assigned visits on that day.
     If called via a clinician method, it will automatically pass in the clinician id.
@@ -87,17 +88,20 @@ def optimize_trip(clin_id=""):
 
     for node in range(routing.Size()):
         if solution.Value(routing.NextVar(node)) == node and not routing.IsStart(node) and not routing.IsEnd(node):
-            dropped_nodes[node] = "Skill/Discipline Mismatch" if routing.GetDisjunctionMaxCardinality(node) <= 1 else "Time Window Mismatch"
+            dropped_nodes[node] = "Skill/Discipline Mismatch" if routing.GetDisjunctionMaxCardinality(
+                node) <= 1 else "Time Window Mismatch"
 
     # Create optimal route order and assign to each clinician. Pass clin as list for proper handling
-    rt_detail = return_solution([clin], visits, len(data_dict["start_list"]),
-                                dropped_nodes, manager, routing, solution)
+    return_solution([clin], visits, len(data_dict["start_list"]), dropped_nodes, manager, routing, solution)
 
-    # # Save route as coordinates. JavaScript API only works using coordinates
-    # ordered_route_coords = [clin.start_coord] + [visits[i-1].coord for i in route_order[1:-1]] + [clin.end_coord]
+    # Prompt user for which type of map to load
+    confirm = validate.yes_or_no("View route on map?: ")
 
-    # # Plot coords on map
-    # map_features(route=ordered_route_coords)
+    if not confirm:
+        return 0
+
+    display_route(clin)
+    return 1
 
 
 def optimize_team(team_id=""):
@@ -186,15 +190,20 @@ def optimize_team(team_id=""):
 
     for node in range(routing.Size()):
         if solution.Value(routing.NextVar(node)) == node and not routing.IsStart(node) and not routing.IsEnd(node):
-            dropped_nodes[node] = "Skill/Discipline Mismatch" if routing.GetDisjunctionPenalty(node) < 1 else "Time Window Mismatch"
+            dropped_nodes[node] = "Skill/Discipline Mismatch" if routing.GetDisjunctionPenalty(
+                node) < 1 else "Time Window Mismatch"
 
     # Create optimal route order and assign to each clinician
-    rt_detail = return_solution(clins, team_visits, len(data_dict["start_list"]),
-                                dropped_nodes, manager, routing, solution)
+    return_solution(clins, team_visits, len(data_dict["start_list"]), dropped_nodes, manager, routing, solution)
 
+    # Prompt user for which type of map to load
+    confirm = validate.yes_or_no("View route on map?: ")
+
+    if not confirm:
+        return 0
+
+    display_route(team)
     return 1
-
-    # TODO: Add constraints for already assigned visits
 
 
 def generate_data(visits, clins):
@@ -354,7 +363,7 @@ def route_optimizer(dist_matrix, num_clinicians, start_list, end_list,
     count_dimension = routing.GetDimensionOrDie("count")
     for clin in range(num_clinicians):
         index_end = routing.End(clin)
-        count_dimension.SetCumulVarSoftLowerBound(index_end, int(0.8*num_clinicians//len(priorities)), 100)
+        count_dimension.SetCumulVarSoftLowerBound(index_end, int(0.8 * num_clinicians // len(priorities)), 100)
 
     def demand_callback(from_index):
         """
@@ -493,7 +502,7 @@ def create_dist_matrix(plus_code_list):
             "rows": []
         }
         for j in range(num_column_query):
-            destination_addresses = plus_code_list[j*max_cols:(j+1)*max_cols]
+            destination_addresses = plus_code_list[j * max_cols:(j + 1) * max_cols]
             # Prepare URL for GET request
             url = "https://maps.googleapis.com/maps/api/distancematrix/json?units=imperial"
             origins = "|".join(origin_addresses).replace(" ", "%20B").replace("+", "%2B")
@@ -511,7 +520,8 @@ def create_dist_matrix(plus_code_list):
 
         # Send remaining columns
         if remaining_cols > 0:
-            destination_addresses = plus_code_list[num_column_query*max_cols:num_column_query*max_cols+remaining_cols]
+            destination_addresses = plus_code_list[
+                                    num_column_query * max_cols:num_column_query * max_cols + remaining_cols]
             # Prepare URL for GET request
             url = "https://maps.googleapis.com/maps/api/distancematrix/json?units=imperial"
             origins = "|".join(origin_addresses).replace(" ", "%20B").replace("+", "%2B")
@@ -572,7 +582,8 @@ def create_dist_matrix(plus_code_list):
 
         # Send remaining columns
         if remaining_cols > 0:
-            destination_addresses = plus_code_list[num_column_query*max_cols:num_column_query*max_cols+remaining_cols]
+            destination_addresses = plus_code_list[
+                                    num_column_query * max_cols:num_column_query * max_cols + remaining_cols]
             # Prepare URL for GET request
             url = "https://maps.googleapis.com/maps/api/distancematrix/json?units=imperial"
             origins = "|".join(origin_addresses).replace(" ", "%20B").replace("+", "%2B")
@@ -597,7 +608,8 @@ def create_dist_matrix(plus_code_list):
         # Delete excess rows
         del comb_response["rows"][remaining_rows:]
 
-        distance_matrix[rows_per_send * num_row_query: rows_per_send * num_row_query + remaining_rows] = build_dist_matrix(
+        distance_matrix[
+        rows_per_send * num_row_query: rows_per_send * num_row_query + remaining_rows] = build_dist_matrix(
             comb_response)
 
     return distance_matrix
@@ -718,7 +730,7 @@ def return_solution(clins, visits, n_start_list, dropped_nodes, manager, routing
         dropped_nodes_df = pd.DataFrame.from_dict(dropped_nodes_dict, orient="index")
 
         # Initialize a solutions dataframe and add dropped nodes to it
-        solution_df = pandas.DataFrame(columns=["Clinician", "Patient Name", "Start By", "Leave By", "Priority",
+        solution_df = pd.DataFrame(columns=["Clinician", "Patient Name", "Start By", "Leave By", "Priority",
                                                 "Complexity", "Skills Required", "Discipline Requested", "Address",
                                                 "Driving Time", "Disjunction Reason"])
         solution_df = pd.concat([solution_df, dropped_nodes_df])
@@ -901,8 +913,8 @@ def coord_average(coord_list):
     :return: Tuple of average longitude and latitude
     """
     # Split latitude and longitude
-    lat_list = np.array([coord[0] for coord in coord_list])
-    long_list = np.array([coord[1] for coord in coord_list])
+    lat_list = np.array([coord[0] for coord_group in coord_list for coord in coord_group])
+    long_list = np.array([coord[1] for coord_group in coord_list for coord in coord_group])
 
     # Average latitude and longitude
     mean_lat = lat_list.mean()
@@ -911,58 +923,330 @@ def coord_average(coord_list):
     return mean_lat, mean_long
 
 
-def map_features(route=None):
+def number_icon(color, number):
+    """
+    Create a 'numbered' icon for use with Folium
+    :param color: Color of marker
+    :param number: Number of marker
+    :return: Marker icon
+    """
+    icon = folium.features.DivIcon(
+        icon_size=(150, 36),
+        icon_anchor=(18, 38),
+        html="""<span class="fa-stack" style="font-size: 12pt">
+                    <!-- The icon that will wrap the number -->
+                    <span class="fa fa-circle-o fa-stack-2x" style="color:{:s}"></span>
+                    <!-- a strong element with the custom content, in this case a number -->
+                    <strong class="fa-stack-1x">{:02d}</strong>
+                </span>""".format(color, number)
+    )
+    return icon
+
+
+def display_route(obj):
     """
     Menu for mapping functions
-    :param route: Optional - If passed, this will be used as the route rather than reloading from clin.visits
+    :param obj: The object from which to gather the route (Team or Clinician only!)
     :return: 0 if nothing is selected
     """
     # TODO: Create an attribute to flag if a day has been optimized
-    # Load a clinician to pull their route if no route passed
-    if not route:
-        print("Please select a clinician for whom you would like to optimize the route.")
-        clin = classes.person.Clinician.load_self()
+    # Prompt user for date for optimization and validate format
+    while True:
+        inp_date = validate.qu_input("Please select a date to optimize the route: ")
 
-        if not clin:
+        if not inp_date:
             return 0
 
-        # Prompt user for date for optimization and validate format
-        while True:
-            inp_date = validate.qu_input("Please select a date to view: ")
+        try:
+            val_date = validate.valid_date(inp_date).date().strftime("%d/%m/%Y")
 
-            if not inp_date:
-                return 0
+        except AttributeError:
+            print("Invalid date format.")
+            continue
 
-            val_date = validate.valid_date(inp_date)
+        if val_date:
+            break
 
-            if val_date:
-                break
+    # If team, load list of all linked clinicians
+    if isinstance(obj, classes.team.Team):
+        clins = [in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{clin_id}.pkl") for clin_id in
+                 obj._clin_id]
 
-        # Create a list of coords by loading all visits attached to the clinician only if they are scheduled for date.
-        route = [in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl").coord for visit_id
-                 in clin.visits['val_date']]
+    # If clin, put clin into list for consistent handling
+    elif isinstance(obj, classes.person.Clinician):
+        clins = [obj]
 
-        # Append start and end address
-        route = clin._start_coord + route + clin._end_coord
+    else:
+        print("Invalid object. Returning...")
+        return 0
 
-    center = coord_average(route)
+    # Load list of visits for each clinician
+    visits = []
+    for clin in clins:
+        # Handle key errors for clinicians who do not have visits on the designated day
+        try:
+            clin_visits = clin.visits[val_date]
+        except KeyError:
+            continue
 
-    # Initiate AWS SSM integration for secrets storage
-    ssm = boto3.client('ssm')
+        visit_list = []
+        for visit_id in clin_visits:
+            visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
+            visit_list.append(visit)
+        visits.append(visit_list)
 
-    # Grab api key from AWS and authenticate with google
-    google_api_key = ssm.get_parameter(Name="GOOGLE_CLOUD_API_KEY", WithDecryption=True)["Parameter"]["Value"]
+    # Prompt user for which type of map to load
+    print("Please select how you would like to view the route:\n"
+          "     1) Map Markers Only (Quick)\n"
+          "     2) Map with Full Route Info\n")
 
-    # Initialize googlemaps API
-    gmaps = googlemaps.Client(key=google_api_key)
+    selection = -1
+    while selection not in ["1", "2"]:
+        selection = validate.qu_input("Selection: ")
 
-    result_map = gmaps.static_map(
-        center=center,
-        scale=2,
-        zoom=12,
-        size=[640, 640],
-        format="jpg",
-        maptype="roadmap",
-        markers=route,
-        path="color:0x0000ff|weight:2|" + "|".join()
-    )
+        if not selection:
+            return 0
+
+    if selection == "1":
+        map_markers_only(clins, visits)
+
+    if selection == "2":
+        map_markers_and_polyline(clins, visits)
+
+    return 1
+
+
+def map_markers_only(clins, visits):
+    """
+    Generates a Folium map with markers for each patient. This does not show route details.
+    :param clins: Clinicians on the route
+    :param visits: Visits for each clinician on the route
+    :return: 1 if successful
+    """
+    # Load coordinates for each visit and start and end coords for each clinician
+    visit_locations = [[visit.coord for visit in visit_group] for visit_group in visits]
+    center_coord = coord_average(visit_locations)
+
+    # Initialize map and set boundaries.
+    route_map = folium.Map(location=center_coord)
+    route_map.fit_bounds(visit_locations)
+
+    color_list = (
+        'darkblue', 'purple', 'orange', 'green', 'beige', 'lightgreen', 'blue', 'pink', 'lightred', 'red', 'lightgray')
+
+    # Loop through each coord group by clinician and create a new marker and tooltip, assorted by color for each clinician
+    for clin_index, clin in enumerate(clins):
+        # Add feature group for each clinician so they can be turned on or off
+        feature_group = folium.FeatureGroup(name=f"{clin.name}").add_to(route_map)
+
+        # Create tooltip for clinician end location
+        clin_tooltip = f"""
+                    <center><h4>Clinician: {clin.name}</h4></center>
+                    <p><b>Address</b>: {clin.address}</p>
+                    <p><b>Time Window</b>: {clin.start_time} - {clin.end_time}</p>
+                    <p><b>Capacity</b>: {clin.capacity}</p>
+                    <p><b>Discipline</b>: {clin.discipline}</p>
+                    <p><b>Skills Required</b>: {clin.skill_list}</p>
+                    """
+
+        # Create marker image for start location
+        feature_group.add_child(
+            folium.Marker(
+                clin.start_coord,
+                tooltip=clin_tooltip,
+                icon=folium.Icon(icon_color='white', icon="glyphicon-home", color=color_list[clin_index]),
+            ))
+
+        # Loop through visit coordinates and mark on map
+        for visit_index, coord in enumerate(visit_locations[clin_index]):
+            visit_tooltip = f"""
+                        <center><h4>{visit_index + 1}. {visits[clin_index][visit_index].patient_name}</h4></center>
+                        <p><b>Address</b>: {visits[clin_index][visit_index].address}</p>
+                        <p><b>Time Window</b>: {visits[clin_index][visit_index].time_earliest} - {visits[clin_index][visit_index].time_latest}</p>
+                        <p><b>Priority</b>: {visits[clin_index][visit_index].visit_priority}</p>
+                        <p><b>Complexity</b>: {visits[clin_index][visit_index].visit_complexity}</p>
+                        <p><b>Skills Required</b>: {visits[clin_index][visit_index].skill_list}</p>
+                        <p><b>Discipline Requested</b>: {visits[clin_index][visit_index].discipline}</p>
+                        """
+
+            # Create marker image
+            feature_group.add_child(
+                folium.Marker(
+                    coord,
+                    tooltip=visit_tooltip,
+                    icon=folium.Icon(icon_color='white', color=color_list[clin_index]),
+                ))
+
+            # Add number to marker
+            feature_group.add_child(
+                folium.Marker(
+                    coord,
+                    tooltip=visit_tooltip,
+                    icon=number_icon(color_list[clin_index], visit_index + 1)
+                ))
+
+        # Create marker image for end location
+        feature_group.add_child(
+            folium.Marker(
+                clin.end_coord,
+                tooltip=clin_tooltip,
+                icon=folium.Icon(icon_color='white', icon="glyphicon-home", color=color_list[clin_index]),
+            ))
+
+    # Add layer control to map and display in browser
+    folium.LayerControl().add_to(route_map)
+    route_map.show_in_browser()
+
+
+def find_shortest_route(graph, start_coord, end_coord):
+    """
+    Finds the shortest route between two coordinates using nodes from OpenStreetMaps
+    :param graph: NetworkX Graph providing nodes and edges
+    :param start_coord: Starting coordinates
+    :param end_coord: Ending coordinates
+    :return:
+    """
+    # find the nearest node to the start location
+    orig_node = ox.nearest_nodes(graph, start_coord[1], start_coord[0])
+    # find the nearest node to the end location
+    dest_node = ox.nearest_nodes(graph, end_coord[1], end_coord[0])
+    #  find the shortest path
+    shortest_route = nx.shortest_path(graph,
+                                      orig_node,
+                                      dest_node,
+                                      weight='time')
+
+    return shortest_route
+
+
+def map_markers_and_polyline(clins, visits):
+    """
+    Generates a Folium map with markers for each patient and a Polyline outlining the route.
+    Route is calculated via NetworkX using nodes from OpenStreetMaps.
+    :param clins: Clinicians on the route
+    :param visits: Visits for each clinician on the route
+    :return: 1 if successful
+    """
+    # Load coordinates for each visit and start and end coords for each clinician
+    visit_locations = [[visit.coord for visit in visit_group] for visit_group in visits]
+
+    # Get coordinates for bounding box
+    start_locations = [clin.start_coord for clin in clins]
+    end_locations = [clin.end_coord for clin in clins]
+    all_locations = start_locations + [visit.coord for visit_group in visits for visit in visit_group] + end_locations
+
+    all_lat = np.array([coord[0] for coord in all_locations])
+    all_lng = np.array([coord[1] for coord in all_locations])
+    north_bbox_lim = np.max(all_lat)
+    south_bbox_lim = np.min(all_lat)
+    east_bbox_lim = np.max(all_lng)
+    west_bbox_lim = np.min(all_lng)
+
+    # TODO: Add a preferred travel mode by clinician
+    # Set mode of transit and define optmisation method
+    mode = 'drive'  # "all_private", "all", "bike", "drive", "drive_service", "walk"
+
+    # TODO: Update so it dynamically selects the city
+    graph = ox.graph_from_bbox(north_bbox_lim, south_bbox_lim, east_bbox_lim, west_bbox_lim, network_type=mode)
+
+    # Calculate central point to initialize map
+    center_coord = coord_average(visit_locations)
+
+    # Initialize map and set boundaries.
+    route_map = folium.Map(location=center_coord)
+
+    # Create feature groups and add to map as layers
+    marker_group = folium.FeatureGroup(name=f"Markers").add_to(route_map)
+    route_group = folium.FeatureGroup(name=f"Routes").add_to(route_map)
+
+    color_list = (
+        'darkblue', 'purple', 'orange', 'green', 'beige', 'lightgreen', 'blue', 'pink', 'lightred', 'red', 'lightgray')
+
+    for clin_index, clin in enumerate(clins):
+        # Create subgroups for each clinician in group
+        sub_marker_group = plugins.FeatureGroupSubGroup(marker_group,
+                                                               name=f"Markers - {clins[clin_index].name}").add_to(
+            route_map)
+        sub_route_group = plugins.FeatureGroupSubGroup(route_group,
+                                                              name=f"Route - {clins[clin_index].name}").add_to(
+            route_map)
+
+        # Create tooltip for clinician end location
+        clin_tooltip = f"""
+                    <center><h4>Clinician: {clin.name}</h4></center>
+                    <p><b>Address</b>: {clin.address}</p>
+                    <p><b>Time Window</b>: {clin.start_time} - {clin.end_time}</p>
+                    <p><b>Capacity</b>: {clin.capacity}</p>
+                    <p><b>Discipline</b>: {clin.discipline}</p>
+                    <p><b>Skills Required</b>: {clin.skill_list}</p>
+                    """
+
+        # Create marker image for start location
+        sub_marker_group.add_child(
+            folium.Marker(
+                clin.start_coord,
+                tooltip=clin_tooltip,
+                icon=folium.Icon(icon_color='white', icon="glyphicon-home", color=color_list[clin_index]),
+            ))
+
+        shortest_route = find_shortest_route(graph, clin.start_coord, visits[clin_index][0].coord)
+
+        # Add route to map. Each coordinate is a node and is a point at which directions will change
+        coords = [(graph.nodes[node]["y"], graph.nodes[node]["x"]) for node in shortest_route]
+        sub_route_group.add_child(folium.PolyLine(coords, weight=3, color=color_list[clin_index]))
+
+        # Create routes for each visit for the clinician
+        for visit_index, visit in enumerate(visits[clin_index]):
+            # Find the shortest route between coordinates
+            if visit_index != len(visits[clin_index])-1:
+                shortest_route = find_shortest_route(graph,
+                                                     visit_locations[clin_index][visit_index],
+                                                     visit_locations[clin_index][visit_index+1])
+            # Add route to map
+            if shortest_route:
+                coords = [(graph.nodes[node]["y"], graph.nodes[node]["x"]) for node in shortest_route]
+                sub_route_group.add_child(folium.PolyLine(coords, weight=3, color=color_list[clin_index]))
+
+                visit_tooltip = f"""
+                            <center><h4>{visit_index + 1}. {visit.patient_name}</h4></center>
+                            <p><b>Address</b>: {visit.address}</p>
+                            <p><b>Time Window</b>: {visit.time_earliest} - {visit.time_latest}</p>
+                            <p><b>Priority</b>: {visit.visit_priority}</p>
+                            <p><b>Complexity</b>: {visit.visit_complexity}</p>
+                            <p><b>Skills Required</b>: {visit.skill_list}</p>
+                            <p><b>Discipline Requested</b>: {visit.discipline}</p>
+                            """
+
+                # Create marker image
+                sub_marker_group.add_child(
+                    folium.Marker(
+                        visit.coord,
+                        tooltip=visit_tooltip,
+                        icon=folium.Icon(icon_color='white', color=color_list[clin_index]),
+                    ))
+
+                # Add number to marker
+                sub_marker_group.add_child(
+                    folium.Marker(
+                        visit.coord,
+                        tooltip=visit_tooltip,
+                        icon=number_icon(color_list[clin_index], visit_index + 1)
+                    ))
+
+        # Add Polyline for end coordinates
+        shortest_route = find_shortest_route(graph, visits[clin_index][len(visits[clin_index])-1].coord, clin.end_coord)
+
+        # Add route to map. Each coordinate is a node and is a point at which directions will change
+        coords = [(graph.nodes[node]["y"], graph.nodes[node]["x"]) for node in shortest_route]
+        sub_route_group.add_child(folium.PolyLine(coords, weight=3, color=color_list[clin_index]))
+
+        # Create marker image for end location
+        sub_marker_group.add_child(
+            folium.Marker(
+                clin.end_coord,
+                tooltip=clin_tooltip,
+                icon=folium.Icon(icon_color='white', icon="glyphicon-home", color=color_list[clin_index]),
+            ))
+
+    folium.LayerControl().add_to(route_map)
+    route_map.show_in_browser()

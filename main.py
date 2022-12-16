@@ -1,6 +1,6 @@
 # This programme will use a feed from a geolocation API to determine the ideal route for Clinician to Patient homes
 # based on a geographic data, patient preferences, and clinician availability.
-# It will use geocoding from Nominatim: https://nominatim.org/
+# It will use geocoding from Google Maps API.
 import navigation
 from classes.person import Patient, Clinician
 from classes.visits import Visit

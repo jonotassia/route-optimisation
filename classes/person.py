@@ -905,7 +905,9 @@ class Clinician(Human):
                                           "     4. Modify Discipline\n"
                                           "     5. Modify Skills\n"
                                           "     6. Assign Team\n"
-                                          "     7. Inactivate Record\n"
+                                          "     7. Optimize Route\n"
+                                          "     8. Display Route\n"    
+                                          "     9. Inactivate Record\n"
                                           "\n"
                                           "Selection: ")
 
@@ -936,8 +938,16 @@ class Clinician(Human):
             elif selection == "6":
                 self.assign_team()
 
-            # Inactivate record
+            # Optimize route
             elif selection == "7":
+                self.optimize_route()
+
+            # display route
+            elif selection == "8":
+                self.display_route()
+
+            # Inactivate record
+            elif selection == "9":
                 self.inactivate_self()
                 return 0
 
@@ -1145,9 +1155,13 @@ class Clinician(Human):
         self.write_self()
         return 1
 
-    def optimize_clinician_trip(self):
+    def optimize_route(self):
         """Calculates the estimated trip route for the clinician."""
         geolocation.optimize_trip(clin_id=self.id)
+
+    def display_route(self):
+        """Displays the route for the clinician."""
+        geolocation.display_route(self.id)
 
     def assign_team(self):
         """
