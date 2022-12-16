@@ -731,8 +731,8 @@ def return_solution(clins, visits, n_start_list, dropped_nodes, manager, routing
 
         # Initialize a solutions dataframe and add dropped nodes to it
         solution_df = pd.DataFrame(columns=["Clinician", "Patient Name", "Start By", "Leave By", "Priority",
-                                                "Complexity", "Skills Required", "Discipline Requested", "Address",
-                                                "Driving Time", "Disjunction Reason"])
+                                            "Complexity", "Skills Required", "Discipline Requested", "Address",
+                                            "Driving Time", "Disjunction Reason"])
         solution_df = pd.concat([solution_df, dropped_nodes_df])
 
         for clin_index, clin in enumerate(clins):
@@ -1145,8 +1145,6 @@ def map_markers_and_polyline(clins, visits):
     # TODO: Add a preferred travel mode by clinician
     # Set mode of transit and define optmisation method
     mode = 'drive'  # "all_private", "all", "bike", "drive", "drive_service", "walk"
-
-    # TODO: Update so it dynamically selects the city
     graph = ox.graph_from_bbox(north_bbox_lim, south_bbox_lim, east_bbox_lim, west_bbox_lim, network_type=mode)
 
     # Calculate central point to initialize map
@@ -1165,10 +1163,10 @@ def map_markers_and_polyline(clins, visits):
     for clin_index, clin in enumerate(clins):
         # Create subgroups for each clinician in group
         sub_marker_group = plugins.FeatureGroupSubGroup(marker_group,
-                                                               name=f"Markers - {clins[clin_index].name}").add_to(
+                                                        name=f"Markers - {clins[clin_index].name}").add_to(
             route_map)
         sub_route_group = plugins.FeatureGroupSubGroup(route_group,
-                                                              name=f"Route - {clins[clin_index].name}").add_to(
+                                                       name=f"Route - {clins[clin_index].name}").add_to(
             route_map)
 
         # Create tooltip for clinician end location
@@ -1198,10 +1196,10 @@ def map_markers_and_polyline(clins, visits):
         # Create routes for each visit for the clinician
         for visit_index, visit in enumerate(visits[clin_index]):
             # Find the shortest route between coordinates
-            if visit_index != len(visits[clin_index])-1:
+            if visit_index != len(visits[clin_index]) - 1:
                 shortest_route = find_shortest_route(graph,
                                                      visit_locations[clin_index][visit_index],
-                                                     visit_locations[clin_index][visit_index+1])
+                                                     visit_locations[clin_index][visit_index + 1])
             # Add route to map
             if shortest_route:
                 coords = [(graph.nodes[node]["y"], graph.nodes[node]["x"]) for node in shortest_route]
@@ -1234,7 +1232,8 @@ def map_markers_and_polyline(clins, visits):
                     ))
 
         # Add Polyline for end coordinates
-        shortest_route = find_shortest_route(graph, visits[clin_index][len(visits[clin_index])-1].coord, clin.end_coord)
+        shortest_route = find_shortest_route(graph, visits[clin_index][len(visits[clin_index]) - 1].coord,
+                                             clin.end_coord)
 
         # Add route to map. Each coordinate is a node and is a point at which directions will change
         coords = [(graph.nodes[node]["y"], graph.nodes[node]["x"]) for node in shortest_route]
