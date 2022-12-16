@@ -222,12 +222,16 @@ def geo_feat():
             return 0
 
         elif selection == "1":
-            geolocation.optimize_route()
-            continue
+            obj = classes.person.Clinician.load_self()
+            if not obj:
+                continue
+            geolocation.optimize_route(obj)
 
         elif selection == "2":
-            geolocation.optimize_team()
-            continue
+            obj = classes.team.Team.load_self()
+            if not obj:
+                continue
+            geolocation.optimize_route(obj)
 
         elif selection == "3":
             # Prompt user for which type of record to load

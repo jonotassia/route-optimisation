@@ -17,27 +17,14 @@ import datetime
 from time import sleep
 
 
-def optimize_route(clin_id=""):
+def optimize_route(obj):
     """
-    Optimizes a single clinician's schedule for the day based on distance traveled for all assigned visits on that day.
-    If called via a clinician method, it will automatically pass in the clinician id.
-    Otherwise, the user will be prompted for a clinician id or name.
-    This uses a combination of Google's distance matrix API and Google OR tools.
-    :param clin_id: ID of clinician (if in clinician context)
+    Optimizes a single or team of clinicians' schedule for the day based on distance traveled for all assigned visits on
+    that day. This uses a combination of Google's distance matrix API and Google OR tools.
+    :param obj: ID of clinician or team to optimize
     :return: List of tuples of appointment coordinates for optimal travel time
     """
-    # Load a clinician to optimize. If id is passed through, do not prompt for ID.
-    if clin_id:
-        clin = in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{clin_id}.pkl")
-
-    else:
-        print("Please select a clinician for whom you would like to optimize the route.")
-        clin = classes.person.Clinician.load_self()
-
-        if not clin:
-            return 0
-
-    # Prompt user for date for optimization and validate format
+    # Get date to optimise
     while True:
         inp_date = validate.qu_input("Please select a date to optimize the route: ")
 
@@ -54,25 +41,62 @@ def optimize_route(clin_id=""):
         if val_date:
             break
 
-    try:
-        visits_by_date = clin.visits[val_date]
+    # If team, load list of all linked clinicians
+    if isinstance(obj, classes.team.Team):
+        # Cancel if team is empty
+        if not obj.pat_load:
+            print("This team does not have any patients associated with it. Exiting...")
+            sleep(1.5)
+            return 0
 
-    except KeyError:
-        print("There are no visits assigned on this date. Returning...")
-        sleep(1.5)
-        return 0
+        clins = [in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{clin_id}.pkl") for clin_id in
+                 obj._clin_id]
 
-    # Create a list of visits by loading all visits attached to the clinician only if they are scheduled for input date.
-    visits = [in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl") for visit_id in visits_by_date]
+        # Grab patients linked to team
+        pats = [in_out.load_obj(classes.person.Patient, f"./data/Patient/{pat_id}.pkl") for pat_id in obj._pat_id]
+
+        # Grab all visits across all patients in team, then unpack for single list of team visits
+        visits = []
+
+        for pat in pats:
+            # Handle key errors for patients who do not have visits on the designated day
+            try:
+                visit_group = pat.visits[val_date]
+            except KeyError:
+                continue
+
+            for visit_id in visit_group:
+                visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
+                visits.append(visit)
+
+        if not visits:
+            print("There are no visits assigned on this date. Returning...")
+            sleep(1.5)
+            return 0
+
+    # If clin, put clin into list for consistent handling
+    elif isinstance(obj, classes.person.Clinician):
+        clins = [obj]
+
+        try:
+            visits_by_date = obj.visits[val_date]
+
+        except KeyError:
+            print("There are no visits assigned on this date. Returning...")
+            sleep(1.5)
+            return 0
+
+        # Create a list of visits by loading all visits attached to the clinician if they are scheduled for input date.
+        visits = [in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl") for visit_id in visits_by_date]
 
     # Generate data for optimisation problem. Pass clinician as a list top proper handling.
-    data_dict = generate_data(visits, [clin])
+    data_dict = generate_data(visits, clins)
 
     # Generate distance matrix
     dist_matrix = create_dist_matrix(data_dict["plus_code_list"])
 
     # Calculate optimal route - this returns a list of lists per clinician, so can safely assume we want index 0
-    manager, routing, solution = route_optimizer(dist_matrix, 1, data_dict["start_list"],
+    manager, routing, solution = route_optimizer(dist_matrix, len(clins), data_dict["start_list"],
                                                  data_dict["end_list"], data_dict["time_windows"],
                                                  data_dict["capacities"], data_dict["weights"],
                                                  data_dict["priorities"], data_dict["skills"],
@@ -92,7 +116,7 @@ def optimize_route(clin_id=""):
                 node) <= 1 else "Time Window Mismatch"
 
     # Create optimal route order and assign to each clinician. Pass clin as list for proper handling
-    return_solution([clin], visits, len(data_dict["start_list"]), dropped_nodes, manager, routing, solution)
+    return_solution(clins, visits, len(data_dict["start_list"]), dropped_nodes, manager, routing, solution)
 
     # Prompt user for which type of map to load
     confirm = validate.yes_or_no("View route on map?: ")
@@ -100,109 +124,7 @@ def optimize_route(clin_id=""):
     if not confirm:
         return 0
 
-    display_route(clin)
-    return 1
-
-
-def optimize_team(team_id=""):
-    """
-    Optimizes all clinicians' schedules within a team by day based on distance traveled.
-    This calculation is based on visits associated with patients that belong to the team.
-    If called via a team method, it will automatically pass in the team id.
-    Otherwise, the user will be prompted for a team id or name.
-    :param team_id: ID of clinician (if in clinician context)
-    :return: Dictionary of list of tuples of appointment coordinates by clinician for optimal travel time
-    """
-    # Load a clinician to optimize. If id is passed through, do not prompt for ID.
-    if team_id:
-        team = in_out.load_obj(classes.team.Team, f"./data/Team/{team_id}.pkl")
-
-    else:
-        print("Please select a team for which you would like to optimize all clinician routes.")
-        team = classes.team.Team.load_self()
-
-    if not team:
-        return 0
-
-    # Cancel if team is empty
-    if not team.pat_load:
-        print("This team does not have any patients associated with it. Exiting...")
-        sleep(1.5)
-        return 0
-
-    # Prompt user for date for optimization and validate format
-    while True:
-        inp_date = validate.qu_input("Please select a date to optimize the route: ")
-
-        if not inp_date:
-            return 0
-
-        try:
-            val_date = validate.valid_date(inp_date).date().strftime("%d/%m/%Y")
-
-        except AttributeError:
-            print("Invalid date format.")
-            continue
-
-        if val_date:
-            break
-
-    # Grab patients linked to team
-    pats = [in_out.load_obj(classes.person.Patient, f"./data/Patient/{pat_id}.pkl") for pat_id in team._pat_id]
-
-    # Grab all visits across all patients in team, then unpack for single list of team visits
-    team_visits = []
-
-    for pat in pats:
-        # Handle key errors for patients who do not have visits on the designated day
-        try:
-            visits = pat.visits[val_date]
-        except KeyError:
-            continue
-
-        for visit_id in visits:
-            visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
-            team_visits.append(visit)
-
-    # Create list of all clinicians linked to team
-    clins = [in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{clin_id}.pkl") for clin_id in team._clin_id]
-
-    # Generate data for optimisation problem.
-    data_dict = generate_data(team_visits, clins)
-
-    # calculate distance matrix
-    dist_matrix = create_dist_matrix(data_dict["plus_code_list"])
-
-    # Optimize routes
-    manager, routing, solution = route_optimizer(dist_matrix, team.team_size, data_dict["start_list"],
-                                                 data_dict["end_list"], data_dict["time_windows"],
-                                                 data_dict["capacities"], data_dict["weights"],
-                                                 data_dict["priorities"], data_dict["skills"],
-                                                 data_dict["disc"])
-
-    if not solution:
-        print("No solution found. Returning...")
-        sleep(2)
-        return 0
-
-    # Find all nodes that could not be visited and their penalties
-    dropped_nodes = {}
-
-    for node in range(routing.Size()):
-        if solution.Value(routing.NextVar(node)) == node and not routing.IsStart(node) and not routing.IsEnd(node):
-            dropped_nodes[node] = "Skill/Discipline Mismatch" if routing.GetDisjunctionPenalty(
-                node) < 1 else "Time Window Mismatch"
-
-    # Create optimal route order and assign to each clinician
-    return_solution(clins, team_visits, len(data_dict["start_list"]), dropped_nodes, manager, routing, solution)
-
-    # Prompt user for which type of map to load
-    confirm = validate.yes_or_no("View route on map?: ")
-
-    if not confirm:
-        return 0
-
-    display_route(team)
+    display_route(obj, val_date=val_date)
     return 1
 
 
@@ -943,29 +865,31 @@ def number_icon(color, number):
     return icon
 
 
-def display_route(obj):
+def display_route(obj, val_date=None):
     """
     Menu for mapping functions
     :param obj: The object from which to gather the route (Team or Clinician only!)
+    :param val_date: The date to optimize the route for. If passed through, user is not prompted.
     :return: 0 if nothing is selected
     """
     # TODO: Create an attribute to flag if a day has been optimized
     # Prompt user for date for optimization and validate format
-    while True:
-        inp_date = validate.qu_input("Please select a date to optimize the route: ")
+    if not val_date:
+        while True:
+            inp_date = validate.qu_input("Please select a date to optimize the route: ")
 
-        if not inp_date:
-            return 0
+            if not inp_date:
+                return 0
 
-        try:
-            val_date = validate.valid_date(inp_date).date().strftime("%d/%m/%Y")
+            try:
+                val_date = validate.valid_date(inp_date).date().strftime("%d/%m/%Y")
 
-        except AttributeError:
-            print("Invalid date format.")
-            continue
+            except AttributeError:
+                print("Invalid date format.")
+                continue
 
-        if val_date:
-            break
+            if val_date:
+                break
 
     # If team, load list of all linked clinicians
     if isinstance(obj, classes.team.Team):
@@ -1145,8 +1069,6 @@ def map_markers_and_polyline(clins, visits):
     # TODO: Add a preferred travel mode by clinician
     # Set mode of transit and define optmisation method
     mode = 'drive'  # "all_private", "all", "bike", "drive", "drive_service", "walk"
-
-    # TODO: Update so it dynamically selects the city
     graph = ox.graph_from_bbox(north_bbox_lim, south_bbox_lim, east_bbox_lim, west_bbox_lim, network_type=mode)
 
     # Calculate central point to initialize map
