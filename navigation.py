@@ -244,10 +244,14 @@ def geo_feat():
 
             if selection == "1":
                 obj = classes.person.Clinician.load_self()
+                if not obj:
+                    continue
                 geolocation.display_route(obj)
 
             elif selection == "2":
                 obj = classes.team.Team.load_self()
+                if not obj:
+                    continue
                 geolocation.display_route(obj)
 
             continue

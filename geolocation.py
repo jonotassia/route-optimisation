@@ -1,7 +1,6 @@
 # Contains functions related to geolocation using Placekey and mlrose
 import folium
 from folium import plugins
-from pyrosm import OSM, get_data
 import osmnx as ox
 import networkx as nx
 import pandas as pd
@@ -1124,7 +1123,6 @@ def map_markers_and_polyline(clins, visits):
     """
     Generates a Folium map with markers for each patient and a Polyline outlining the route.
     Route is calculated via NetworkX using nodes from OpenStreetMaps.
-    Data provided in PBF format via Pyrosm.
     :param clins: Clinicians on the route
     :param visits: Visits for each clinician on the route
     :return: 1 if successful
@@ -1143,17 +1141,13 @@ def map_markers_and_polyline(clins, visits):
     south_bbox_lim = np.min(all_lat)
     east_bbox_lim = np.max(all_lng)
     west_bbox_lim = np.min(all_lng)
-    bounding_box = [west_bbox_lim, south_bbox_lim, east_bbox_lim, north_bbox_lim]
 
     # TODO: Add a preferred travel mode by clinician
     # Set mode of transit and define optmisation method
-    mode = 'driving'  # 'driving', 'cycling', 'walking', 'driving+service', 'all'
+    mode = 'drive'  # "all_private", "all", "bike", "drive", "drive_service", "walk"
 
     # TODO: Update so it dynamically selects the city
-    # create graph from OSM using central coordinate
-    osm = OSM(get_data("seattle"), bounding_box=bounding_box)
-    nodes, edges = osm.get_network(network_type=mode, nodes=True)
-    graph = osm.to_graph(nodes, edges, graph_type="networkx")
+    graph = ox.graph_from_bbox(north_bbox_lim, south_bbox_lim, east_bbox_lim, west_bbox_lim, network_type=mode)
 
     # Calculate central point to initialize map
     center_coord = coord_average(visit_locations)
