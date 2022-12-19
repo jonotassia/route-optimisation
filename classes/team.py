@@ -320,7 +320,7 @@ class Team:
 
     def optimize_route(self):
         """Calculates the estimated route for all clinicians on the team."""
-        geolocation.optimize_team(team_id=self.id)
+        geolocation.optimize_route(self.id)
 
     def display_route(self):
         """Displays the route for all clinicians on the team."""

@@ -1157,7 +1157,7 @@ class Clinician(Human):
 
     def optimize_route(self):
         """Calculates the estimated trip route for the clinician."""
-        geolocation.optimize_trip(clin_id=self.id)
+        geolocation.optimize_route(self.id)
 
     def display_route(self):
         """Displays the route for the clinician."""
