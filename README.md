@@ -42,7 +42,7 @@ Each clinician's route is displayed in a different color, and each clinician's r
 
 ## Upcoming Changes
 Future scope includes:
-* Convert IO functions to a separate class, and update all "person" classes to be subclasses of it.
+* Convert IO functions to be use database via SQLAlchemy rather than pickling and saving to a file.
 * Change clinician availability to be a dictionary by date, rather than a static start/stop time across all days.
 * Adding additional constraints, including: preferred clinicians, specimen drop-off or admin tasks
 * Android application for clinicians to view schedule real-time
