@@ -1,6 +1,8 @@
 # This file contains the Visit class to be used in the route optimisation tool.
 import itertools
-
+from sqlalchemy import Column, String, Integer, PickleType, Table, ForeignKey
+from sqlalchemy.ext.mutable import MutableList, MutableDict
+from sql import mapper_registry
 import geolocation
 import validate
 import in_out
@@ -9,6 +11,16 @@ import navigation
 
 
 class Team:
+    __table__ = Table(
+        "Team",
+        mapper_registry.metadata,
+        Column("id", Integer, primary_key=True, unique=True),
+        Column("_pat_id", MutableList.as_mutable(PickleType), ForeignKey("Patient.id"), nullable=True),
+        Column("_clin_id", MutableList.as_mutable(PickleType), ForeignKey("Clinician.id"), nullable=True),
+        Column("status", String, nullable=True),
+        Column("address", MutableDict.as_mutable(PickleType), nullable=True),
+    )
+
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
     _tracked_instances = {}
 

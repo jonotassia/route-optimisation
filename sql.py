@@ -1,8 +1,6 @@
 import pathlib
-from sqlalchemy.orm import declarative_base, sessionmaker, registry
-from sqlalchemy import Column, String, DateTime, Integer, PickleType, Table, ForeignKey, create_engine
-from sqlalchemy.ext.mutable import MutableList
-import datetime
+from sqlalchemy.orm import sessionmaker, registry
+from sqlalchemy import create_engine
 
 
 def create_database():

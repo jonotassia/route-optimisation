@@ -5,10 +5,32 @@ import validate
 import in_out
 import classes
 import navigation
+from sql import mapper_registry
+from sqlalchemy import Column, String, DateTime, Integer, PickleType, Table, ForeignKey
+from sqlalchemy.ext.mutable import MutableList
 from datetime import datetime, date
 
 
+@mapper_registry.mapped
 class Visit:
+    __table__ = Table(
+        "Visit",
+        mapper_registry.metadata,
+        Column("id", Integer, primary_key=True, unique=True),
+        Column("pat_id", Integer, ForeignKey("Patient.id")),
+        Column("clin_id", Integer, ForeignKey("Clinician.id"), nullable=True),
+        Column("exp_date", DateTime, nullable=True),
+        Column("status", String, nullable=True),
+        Column("time_earliest", DateTime, nullable=True),
+        Column("time_latest", DateTime, nullable=True),
+        Column("visit_priority", String, nullable=True),
+        Column("visit_complexity", String, nullable=True),
+        Column("skill_list", MutableList.as_mutable(PickleType), nullable=True),
+        Column("discipline", String, nullable=True),
+        Column("cancel_reason", String, nullable=True),
+        Column("sched_status", String, nullable=True)
+    )
+
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
     _tracked_instances = {}
     _instance_by_date = {}
@@ -153,6 +175,7 @@ class Visit:
             clin.write_self()
 
             self._clin_id = value
+            self.sched_status = "assigned"
 
         else:
             raise ValueError("This is not a valid clinician ID.\n")

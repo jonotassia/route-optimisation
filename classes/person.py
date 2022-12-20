@@ -6,8 +6,11 @@ import navigation
 import validate
 import in_out
 import classes
-import datetime
+from sql import mapper_registry
+from sqlalchemy import Column, String, DateTime, Integer, PickleType, Table, ForeignKey
+from sqlalchemy.ext.mutable import MutableList, MutableDict
 from time import sleep
+
 
 # TODO: Determine best way to generate Visits that are not tied to a date, but relative to days of week
 
@@ -223,7 +226,26 @@ class Human:
     # TODO: Add a class method to reactivate a record
 
 
+@mapper_registry.mapped()
 class Patient(Human):
+    __table__ = Table(
+        "Patient",
+        mapper_registry.metadata,
+        Column("id", Integer, primary_key=True, unique=True),
+        Column("name", MutableList.as_mutable(PickleType)),
+        Column("status", String, nullable=True),
+        Column("dob", DateTime),
+        Column("sex", String),
+        Column("address", MutableDict.as_mutable(PickleType), nullable=True),
+        Column("team_id", Integer, ForeignKey("Team.id"), nullable=True),
+        Column("discipline", String, nullable=True),
+        Column("skill_list", MutableList.as_mutable(PickleType), nullable=True),
+        Column("visits", MutableDict.as_mutable(PickleType), nullable=True),\
+        Column("death_date", DateTime, nullable=True),
+        Column("death_time", DateTime, nullable=True),
+        Column("inactive_reason", String, nullable=True)
+    )
+
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
     _tracked_instances = {}
     _c_inactive_reason = ("no longer under care", "expired", "added in error")
@@ -238,11 +260,11 @@ class Patient(Human):
         super().__init__(status, name, dob, sex, address)
 
         self._id = next(self._id_iter)
-        self._inactive_reason = None
+        self.team_id = team
         self.visits = {}
         self._death_date = None
         self._death_time = None
-        self.team_id = team
+        self._inactive_reason = None
 
         # Update all attributes from passed dict if provided
         self.__dict__.update(kwargs)
@@ -633,7 +655,28 @@ class Patient(Human):
             return 0
 
 
+@mapper_registry.mapped
 class Clinician(Human):
+    __table__ = Table(
+        "Clinician",
+        mapper_registry.metadata,
+        Column("id", Integer, primary_key=True, unique=True),
+        Column("name", MutableList.as_mutable(PickleType)),
+        Column("status", String, nullable=True),
+        Column("dob", DateTime),
+        Column("sex", String),
+        Column("address", MutableDict.as_mutable(PickleType), nullable=True),
+        Column("start_address", MutableDict.as_mutable(PickleType)),
+        Column("end_address", MutableDict.as_mutable(PickleType)),
+        Column("start_time", DateTime),
+        Column("end_time", DateTime),
+        Column("team_id", Integer, ForeignKey("Team.id"), nullable=True),
+        Column("discipline", String, nullable=True),
+        Column("skill_list", MutableList.as_mutable(PickleType), nullable=True),
+        Column("visits", MutableDict.as_mutable(PickleType), nullable=True),
+        Column("inactive_reason", String, nullable=True)
+    )
+
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
     _tracked_instances = {}
     _c_inactive_reason = ("no longer works here", "switched roles", "added in error")
