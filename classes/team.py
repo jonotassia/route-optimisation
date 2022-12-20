@@ -2,7 +2,7 @@
 import itertools
 from sqlalchemy import Column, String, Integer, PickleType, Table, ForeignKey
 from sqlalchemy.ext.mutable import MutableList, MutableDict
-from sql import mapper_registry
+from data_manager import DataManagerMixin
 import geolocation
 import validate
 import in_out
@@ -10,10 +10,10 @@ import classes
 import navigation
 
 
-class Team:
+class Team(DataManagerMixin):
     __table__ = Table(
         "Team",
-        mapper_registry.metadata,
+        DataManagerMixin.mapper_registry.metadata,
         Column("id", Integer, primary_key=True, unique=True),
         Column("_pat_id", MutableList.as_mutable(PickleType), ForeignKey("Patient.id"), nullable=True),
         Column("_clin_id", MutableList.as_mutable(PickleType), ForeignKey("Clinician.id"), nullable=True),

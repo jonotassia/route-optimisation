@@ -5,7 +5,7 @@ import navigation
 from classes.person import Patient, Clinician
 from classes.visits import Visit
 from classes.team import Team
-from sql import create_database
+from data_manager import create_database
 
 
 """

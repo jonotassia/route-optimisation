@@ -5,7 +5,7 @@ import navigation
 import validate
 import in_out
 import classes
-from sql import mapper_registry
+from data_manager import DataManagerMixin
 from sqlalchemy import Column, String, DateTime, Integer, PickleType, Table, ForeignKey
 from sqlalchemy.ext.mutable import MutableList, MutableDict
 from time import sleep
@@ -225,11 +225,11 @@ class Human:
     # TODO: Add a class method to reactivate a record
 
 
-@mapper_registry.mapped()
-class Patient(Human):
+@DataManagerMixin.mapper_registry.mapped()
+class Patient(Human, DataManagerMixin):
     __table__ = Table(
         "Patient",
-        mapper_registry.metadata,
+        DataManagerMixin.mapper_registry.metadata,
         Column("id", Integer, primary_key=True, unique=True),
         Column("name", MutableList.as_mutable(PickleType)),
         Column("status", String, nullable=True),
@@ -654,11 +654,11 @@ class Patient(Human):
             return 0
 
 
-@mapper_registry.mapped
-class Clinician(Human):
+@DataManagerMixin.mapper_registry.mapped
+class Clinician(Human, DataManagerMixin):
     __table__ = Table(
         "Clinician",
-        mapper_registry.metadata,
+        DataManagerMixin.mapper_registry.metadata,
         Column("id", Integer, primary_key=True, unique=True),
         Column("name", MutableList.as_mutable(PickleType)),
         Column("status", String, nullable=True),

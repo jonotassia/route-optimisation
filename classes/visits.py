@@ -7,15 +7,15 @@ import classes
 import navigation
 from sqlalchemy import Column, String, DateTime, Integer, PickleType, Table, ForeignKey
 from sqlalchemy.ext.mutable import MutableList
-from sql import mapper_registry
+from data_manager import DataManagerMixin
 from datetime import datetime, date
 
 
-@mapper_registry.mapped
-class Visit:
+@DataManagerMixin.mapper_registry.mapped
+class Visit(DataManagerMixin):
     __table__ = Table(
         "Visit",
-        mapper_registry.metadata,
+        DataManagerMixin.mapper_registry.metadata,
         Column("id", Integer, primary_key=True, unique=True),
         Column("pat_id", Integer, ForeignKey("Patient.id")),
         Column("clin_id", Integer, ForeignKey("Clinician.id"), nullable=True),
