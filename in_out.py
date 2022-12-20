@@ -1,4 +1,5 @@
 # This file contains various functions to be used in the route optimisation tool.
+import os.path
 import pickle
 import pathlib
 import validate
@@ -245,5 +246,3 @@ def import_csv(cls, filepath=None):
 
         except (FileNotFoundError, OSError):
             print("File not found. Ensure the input file contains '.csv' at the end.")
-
-
