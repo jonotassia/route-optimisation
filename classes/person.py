@@ -1,6 +1,5 @@
 # This file contains classes to be used in the route optimisation tool.
 import itertools
-
 import geolocation
 import navigation
 import validate

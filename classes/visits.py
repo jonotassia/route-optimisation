@@ -5,9 +5,9 @@ import validate
 import in_out
 import classes
 import navigation
-from sql import mapper_registry
 from sqlalchemy import Column, String, DateTime, Integer, PickleType, Table, ForeignKey
 from sqlalchemy.ext.mutable import MutableList
+from sql import mapper_registry
 from datetime import datetime, date
 
 

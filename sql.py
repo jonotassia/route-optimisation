@@ -1,6 +1,7 @@
 import pathlib
 from sqlalchemy.orm import sessionmaker, registry
 from sqlalchemy import create_engine
+from contextlib import contextmanager
 
 
 def create_database():
@@ -16,13 +17,13 @@ def create_database():
     # Create engine that will be used to file to the SQLite database. Echo allows us to bypass comments produced by SQL
     engine = create_engine(connection_string, echo=True)
 
-    # Create a sessionmaker class which we use to populate each individual table.
-    session = sessionmaker()
+    # Create and configure a sessionmaker class which we use to populate each individual table.
+    Session = sessionmaker(bind=engine)
 
     # Create mapper registry
     mapper_registry = registry()
 
-    return engine, session, mapper_registry
+    return Session, mapper_registry
 
 
 def create_tables(engine, base):
@@ -53,5 +54,22 @@ def create_row(obj, engine, session):
     local_session.commit()
 
 
-if __name__ == "__main__":
-    engine, session, mapper_registry = create_database()
+@contextmanager
+def session_scope():
+    """
+    Provides a transactional scope around a series of operations.
+    :return: None
+    """
+    session = Session()
+    try:
+        yield session
+        session.commit()
+    except:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+# initialize SQLAlchemy objects
+Session, mapper_registry = create_database()

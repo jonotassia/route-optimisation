@@ -5,6 +5,7 @@ import navigation
 from classes.person import Patient, Clinician
 from classes.visits import Visit
 from classes.team import Team
+from sql import create_database
 
 
 """
@@ -27,7 +28,8 @@ Secondary actions available:
 # TODO: Investigate how to automatically batch and run nightly
 # TODO: Determine how to deploy to a server
 
-if __name__ == "__main__":
+
+def main():
     # Initialize a list of all classes and loop to populate instance tracking lists
     _class_list = (Patient, Clinician, Visit, Team)
 
@@ -35,3 +37,7 @@ if __name__ == "__main__":
         cls.load_tracked_instances()
 
     navigation.main_menu(_class_list)
+
+
+if __name__ == "__main__":
+    main()
