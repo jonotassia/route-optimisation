@@ -5,7 +5,7 @@ import navigation
 from classes.person import Patient, Clinician
 from classes.visits import Visit
 from classes.team import Team
-from data_manager import create_database
+from data_manager import DataManagerMixin
 
 
 """
@@ -30,6 +30,9 @@ Secondary actions available:
 
 
 def main():
+    # Create database tables if not already present
+    DataManagerMixin.create_tables()
+
     # Initialize a list of all classes and loop to populate instance tracking lists
     _class_list = (Patient, Clinician, Visit, Team)
 

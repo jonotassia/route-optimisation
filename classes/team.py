@@ -10,15 +10,16 @@ import classes
 import navigation
 
 
+@DataManagerMixin.mapper_registry.mapped
 class Team(DataManagerMixin):
     __table__ = Table(
         "Team",
         DataManagerMixin.mapper_registry.metadata,
-        Column("id", Integer, primary_key=True, unique=True),
-        Column("_pat_id", MutableList.as_mutable(PickleType), ForeignKey("Patient.id"), nullable=True),
-        Column("_clin_id", MutableList.as_mutable(PickleType), ForeignKey("Clinician.id"), nullable=True),
-        Column("status", String, nullable=True),
-        Column("address", MutableDict.as_mutable(PickleType), nullable=True),
+        Column("_id", Integer, primary_key=True, unique=True),
+        Column("_pat_id", MutableList.as_mutable(PickleType), ForeignKey("Patient._id"), nullable=True),
+        Column("_clin_id", MutableList.as_mutable(PickleType), ForeignKey("Clinician._id"), nullable=True),
+        Column("_status", String, nullable=True),
+        Column("_address", MutableDict.as_mutable(PickleType), nullable=True)
     )
 
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created

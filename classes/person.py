@@ -6,7 +6,7 @@ import validate
 import in_out
 import classes
 from data_manager import DataManagerMixin
-from sqlalchemy import Column, String, DateTime, Integer, PickleType, Table, ForeignKey
+from sqlalchemy import Column, String, Date, Time, Integer, PickleType, Table, ForeignKey
 from sqlalchemy.ext.mutable import MutableList, MutableDict
 from time import sleep
 
@@ -225,24 +225,24 @@ class Human:
     # TODO: Add a class method to reactivate a record
 
 
-@DataManagerMixin.mapper_registry.mapped()
+@DataManagerMixin.mapper_registry.mapped
 class Patient(Human, DataManagerMixin):
     __table__ = Table(
         "Patient",
         DataManagerMixin.mapper_registry.metadata,
-        Column("id", Integer, primary_key=True, unique=True),
-        Column("name", MutableList.as_mutable(PickleType)),
-        Column("status", String, nullable=True),
-        Column("dob", DateTime),
-        Column("sex", String),
-        Column("address", MutableDict.as_mutable(PickleType), nullable=True),
-        Column("team_id", Integer, ForeignKey("Team.id"), nullable=True),
-        Column("discipline", String, nullable=True),
-        Column("skill_list", MutableList.as_mutable(PickleType), nullable=True),
-        Column("visits", MutableDict.as_mutable(PickleType), nullable=True),\
-        Column("death_date", DateTime, nullable=True),
-        Column("death_time", DateTime, nullable=True),
-        Column("inactive_reason", String, nullable=True)
+        Column("_id", Integer, primary_key=True, unique=True),
+        Column("_name", MutableList.as_mutable(PickleType)),
+        Column("_status", String, nullable=True),
+        Column("_dob", Date),
+        Column("_sex", String),
+        Column("_address", MutableDict.as_mutable(PickleType), nullable=True),
+        Column("_team_id", Integer, ForeignKey("Team._id"), nullable=True),
+        Column("_discipline", String, nullable=True),
+        Column("_skill_list", MutableList.as_mutable(PickleType), nullable=True),
+        Column("_visits", MutableDict.as_mutable(PickleType), nullable=True),
+        Column("_death_date", Date, nullable=True),
+        Column("_death_time", Time, nullable=True),
+        Column("_inactive_reason", String, nullable=True)
     )
 
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
@@ -659,21 +659,21 @@ class Clinician(Human, DataManagerMixin):
     __table__ = Table(
         "Clinician",
         DataManagerMixin.mapper_registry.metadata,
-        Column("id", Integer, primary_key=True, unique=True),
-        Column("name", MutableList.as_mutable(PickleType)),
-        Column("status", String, nullable=True),
-        Column("dob", DateTime),
-        Column("sex", String),
-        Column("address", MutableDict.as_mutable(PickleType), nullable=True),
-        Column("start_address", MutableDict.as_mutable(PickleType)),
-        Column("end_address", MutableDict.as_mutable(PickleType)),
-        Column("start_time", DateTime),
-        Column("end_time", DateTime),
-        Column("team_id", Integer, ForeignKey("Team.id"), nullable=True),
-        Column("discipline", String, nullable=True),
-        Column("skill_list", MutableList.as_mutable(PickleType), nullable=True),
-        Column("visits", MutableDict.as_mutable(PickleType), nullable=True),
-        Column("inactive_reason", String, nullable=True)
+        Column("_id", Integer, primary_key=True, unique=True),
+        Column("_name", MutableList.as_mutable(PickleType)),
+        Column("_status", String, nullable=True),
+        Column("_dob", Date),
+        Column("_sex", String),
+        Column("_address", MutableDict.as_mutable(PickleType), nullable=True),
+        Column("_start_address", MutableDict.as_mutable(PickleType)),
+        Column("_end_address", MutableDict.as_mutable(PickleType)),
+        Column("_start_time", Time),
+        Column("_end_time", Time),
+        Column("_team_id", Integer, ForeignKey("Team._id"), nullable=True),
+        Column("_discipline", String, nullable=True),
+        Column("_skill_list", MutableList.as_mutable(PickleType), nullable=True),
+        Column("_visits", MutableDict.as_mutable(PickleType), nullable=True),
+        Column("_inactive_reason", String, nullable=True)
     )
 
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created

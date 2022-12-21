@@ -15,7 +15,7 @@ class DataManagerMixin:
     BASE_DIR = pathlib.Path().absolute()
 
     # Create a connection string to the database
-    connection_string = "sqlite:///" + pathlib.Path.joinpath(BASE_DIR, "routing.db").as_posix()
+    connection_string = "sqlite:///" + BASE_DIR.as_posix() + "/data/routing.db"
 
     # Create engine that will be used to file to the SQLite database. Echo allows us to bypass comments produced by SQL
     engine = create_engine(connection_string, echo=True)
@@ -42,12 +42,13 @@ class DataManagerMixin:
         finally:
             session.close()
 
-    def create_tables(self):
+    @classmethod
+    def create_tables(cls):
         """
         Creates tables based on metadata provided. This will convert the __table__ attribute
         :return: None
         """
-        self.mapper_registry.metadata.create_all(self.engine)
+        cls.mapper_registry.metadata.create_all(cls.engine)
 
     def write_obj(self, override=1):
         """
@@ -125,7 +126,7 @@ class DataManagerMixin:
         :return: 1 if successful
         """
         # Get a list of params in the __init__ definition
-        params = cls.__init__.__code__.co_varnames
+        params = cls.__init__.__code__.co_varnames[:-1]
 
         # Create a pandas dataframe with just column headings (remove init_dict) and save to csv
         flat_file = pd.DataFrame(columns=params)

@@ -5,7 +5,7 @@ import validate
 import in_out
 import classes
 import navigation
-from sqlalchemy import Column, String, DateTime, Integer, PickleType, Table, ForeignKey
+from sqlalchemy import Column, String, Date, Time, Integer, PickleType, Table, ForeignKey
 from sqlalchemy.ext.mutable import MutableList
 from data_manager import DataManagerMixin
 from datetime import datetime, date
@@ -16,19 +16,19 @@ class Visit(DataManagerMixin):
     __table__ = Table(
         "Visit",
         DataManagerMixin.mapper_registry.metadata,
-        Column("id", Integer, primary_key=True, unique=True),
-        Column("pat_id", Integer, ForeignKey("Patient.id")),
-        Column("clin_id", Integer, ForeignKey("Clinician.id"), nullable=True),
-        Column("exp_date", DateTime, nullable=True),
-        Column("status", String, nullable=True),
-        Column("time_earliest", DateTime, nullable=True),
-        Column("time_latest", DateTime, nullable=True),
-        Column("visit_priority", String, nullable=True),
-        Column("visit_complexity", String, nullable=True),
-        Column("skill_list", MutableList.as_mutable(PickleType), nullable=True),
-        Column("discipline", String, nullable=True),
-        Column("cancel_reason", String, nullable=True),
-        Column("sched_status", String, nullable=True)
+        Column("_id", Integer, primary_key=True, unique=True),
+        Column("_pat_id", Integer, ForeignKey("Patient._id")),
+        Column("_clin_id", Integer, ForeignKey("Clinician._id"), nullable=True),
+        Column("_exp_date", Date, nullable=True),
+        Column("_status", String, nullable=True),
+        Column("_time_earliest", Time, nullable=True),
+        Column("_time_latest", Time, nullable=True),
+        Column("_visit_priority", String, nullable=True),
+        Column("_visit_complexity", String, nullable=True),
+        Column("_skill_list", MutableList.as_mutable(PickleType), nullable=True),
+        Column("_discipline", String, nullable=True),
+        Column("_cancel_reason", String, nullable=True),
+        Column("_sched_status", String, nullable=True)
     )
 
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
@@ -238,7 +238,7 @@ class Visit(DataManagerMixin):
 
     @property
     def exp_date(self):
-        return str(self._exp_date.date().strftime("%d/%m/%Y"))
+        return str(self._exp_date.strftime("%d/%m/%Y"))
 
     @exp_date.setter
     def exp_date(self, value):

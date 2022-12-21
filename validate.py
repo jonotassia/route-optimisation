@@ -265,7 +265,7 @@ def get_info(obj, attr_dict_list: list):
                     else:
                         print(f"Value already in list.")
 
-                    if validate.yes_or_no("Add another value? "):
+                    if yes_or_no("Add another value? "):
                         continue
 
             except KeyError:
