@@ -3,7 +3,6 @@ import itertools
 import geolocation
 import navigation
 import validate
-import in_out
 import classes
 from data_manager import DataManagerMixin
 from sqlalchemy import Column, String, Date, Time, Integer, PickleType, Table, ForeignKey
@@ -15,7 +14,6 @@ from time import sleep
 
 
 class Human:
-    _tracked_instances = {}
     _c_sex_options = ("male", "female", "not specified")
 
     def __init__(self, status=1, name="", dob="", sex="", address="{}", **kwargs):
@@ -189,17 +187,13 @@ class Human:
             "Address": obj.address
         }
 
-        # If user confirms information is correct, a new object is created, written, and added to _tracked_instances
+        # If user confirms information is correct, a new object is created and written
         if not validate.confirm_info(obj, detail_dict):
             print("Record not created.")
             return 0
 
         obj.write_obj()
         return obj
-
-    @classmethod
-    def load_tracked_instances(cls):
-        in_out.load_tracked_obj(cls)
 
     # TODO: Add a class method to reactivate a record
 
@@ -223,7 +217,6 @@ class Patient(Human, DataManagerMixin):
     )
 
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
-    _tracked_instances = {}
     _c_inactive_reason = ("no longer under care", "expired", "added in error")
 
     def __init__(self, status=1, name="", dob="", sex="", address="", team="", **kwargs):
@@ -303,7 +296,9 @@ class Patient(Human, DataManagerMixin):
         """
         ID of linked team.
         """
-        if value in classes.team.Team._tracked_instances:
+        if value in [team._id for team
+                     in self.session.query(classes.team.Team).distinct().all()
+                     if self.id in team._clin_id]:
             try:
                 old_team_id = self.team_id
             except AttributeError:
@@ -655,7 +650,6 @@ class Clinician(Human, DataManagerMixin):
     )
 
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
-    _tracked_instances = {}
     _c_inactive_reason = ("no longer works here", "switched roles", "added in error")
     _c_skill_list = ("med administration", "specimen collection", "domestic tasks", "physical assessment")
     _c_discipline = ("doctor", "nurse", "physical therapist", "occupational Therapist", "medical assistant")
@@ -797,7 +791,9 @@ class Clinician(Human, DataManagerMixin):
         """
         ID of linked team.
         """
-        if value in classes.team.Team._tracked_instances:
+        if value in [team._id for team
+                     in self.session.query(classes.team.Team).distinct().all()
+                     if self.id in team._clin_id]:
             try:
                 old_team_id = self.team_id
             except AttributeError:

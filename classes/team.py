@@ -5,7 +5,6 @@ from sqlalchemy.ext.mutable import MutableList, MutableDict
 from data_manager import DataManagerMixin
 import geolocation
 import validate
-import in_out
 import classes
 import navigation
 
@@ -23,7 +22,6 @@ class Team(DataManagerMixin):
     )
 
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
-    _tracked_instances = {}
 
     def __init__(self, status=1, name=None, address=None, **kwargs):
         """Initializes a new request and links with pat_id. It contains the following attributes:
@@ -241,17 +239,13 @@ class Team(DataManagerMixin):
             "Address": obj.address
         }
 
-        # If user confirms information is correct, a new object is created, written, and added to _tracked_instances
+        # If user confirms information is correct, a new object is created and written to db
         if not validate.confirm_info(obj, detail_dict):
             print("Record not created.")
             return 0
 
         obj.write_self()
         return obj
-
-    @classmethod
-    def load_tracked_instances(cls):
-        in_out.load_tracked_obj(cls)
 
     def inactivate_self(self):
         """

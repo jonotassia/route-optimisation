@@ -238,33 +238,3 @@ class DataManagerMixin:
 
             except (FileNotFoundError, OSError):
                 print("File not found. Ensure the input file contains '.csv' at the end.")
-
-    def load_tracked_obj(cls):
-        """Class method to initialise all instances of a class from file. Modifies the class attribute tracked_instances.
-            This is uses to allow for quick searching by name, date of birth, and ID"""
-        # TODO: Convert to a database search rather than a IO
-        obj = cls.load_obj()
-
-        # Update tracked instance dictionary with new value (overwrites old values).
-        if isinstance(obj, classes.person.Human):
-            cls._tracked_instances[obj.id] = {"status": obj._status,
-                                              "name": obj._name,
-                                              "dob": obj._dob,
-                                              "sex": obj._sex}
-
-        elif isinstance(obj, classes.visits.Visit):
-            cls._tracked_instances[obj.id] = {"status": obj._status,
-                                              "date": obj._exp_date}
-
-            # Create or add to the search by date list for visits
-            try:
-                obj._instance_by_date[obj.exp_date].append(obj.id)
-
-            except KeyError:
-                obj._instance_by_date[obj.exp_date] = [obj.id]
-
-        else:
-            cls._tracked_instances[obj.id] = {"status": obj._status,
-                                              "name": obj._name}
-
-        next(cls._id_iter)

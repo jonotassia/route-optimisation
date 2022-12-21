@@ -1,8 +1,6 @@
 # This file contains the Visit class to be used in the route optimisation tool.
-import pickle
 import itertools
 import validate
-import in_out
 import classes
 import navigation
 from sqlalchemy import Column, String, Date, Time, Integer, PickleType, Table, ForeignKey
@@ -32,8 +30,6 @@ class Visit(DataManagerMixin):
     )
 
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
-    _tracked_instances = {}
-    _instance_by_date = {}
     _c_visit_complexity = ("simple", "routine", "complex")
     _c_visit_priority = ("green", "amber", "red")
     _c_skill_list = classes.person.Clinician._c_skill_list
@@ -99,7 +95,9 @@ class Visit(DataManagerMixin):
     def pat_id(self, value):
         # NOTE: Unnecessary to have code to remove from old patient because this should only ever be set once
         # Check valid ID
-        if value in classes.person.Patient._tracked_instances:
+        if value in [pat._id for pat
+                     in self.session.query(classes.person.Patient).distinct().all()
+                     if self.id in pat.visits]:
             # Load patient and create or add to the search by date list for visits
             pat = classes.person.Patient.load_obj(value)
 
@@ -131,7 +129,8 @@ class Visit(DataManagerMixin):
     @property
     def patient_name(self):
         if self._pat_id:
-            name = self.session.query(classes.person.Patient).filter(classes.person.Patient._id == self._pat_id).first().name
+            name = self.session.query(classes.person.Patient).filter(
+                classes.person.Patient._id == self._pat_id).first().name
             try:
                 middle_name = name[2]
 
@@ -153,7 +152,9 @@ class Visit(DataManagerMixin):
         if not value:
             self._clin_id = None
 
-        elif value in classes.person.Clinician._tracked_instances:
+        elif value in [clin._id for clin
+                       in self.session.query(classes.person.Clinician).distinct().all()
+                       if self.id in clin.visits]:
             # Load clinician and create or add to the search by date list for visits
             old_clin_id = self._clin_id
 
@@ -197,7 +198,8 @@ class Visit(DataManagerMixin):
     @property
     def clinician_name(self):
         if self._clin_id:
-            name = self.session.query(classes.person.Clinician).filter(classes.person.Clinician._id == self._clin_id).first().name
+            name = self.session.query(classes.person.Clinician).filter(
+                classes.person.Clinician._id == self._clin_id).first().name
             try:
                 middle_name = self._name[2]
 
@@ -254,21 +256,10 @@ class Visit(DataManagerMixin):
             raise ValueError("Date cannot be before today.\n")
 
         else:
-            # Handle date changes if reimporting an existing visit by grabbing the old visit date from instance list
-            old_visit_date = ""
-            try:
-                old_visit_date = Visit._tracked_instances[self.id]["date"]
-
-            except KeyError:
-                pass
+            # Handle date changes if reimporting an existing visit by grabbing the old visit date from database
+            old_visit_date = self.session.query(Visit).filter(Visit._id == self.id).all()
 
             if old_visit_date:
-                try:
-                    self._instance_by_date[old_visit_date].remove(self.id)
-
-                except KeyError:
-                    pass
-
                 # Remove from patient if there is already an entry
                 try:
                     pat = classes.person.Patient.load_obj(self.pat_id)
@@ -525,9 +516,6 @@ class Visit(DataManagerMixin):
         if not validate.confirm_info(self, detail_dict):
             self.refresh_self()
             return 0
-
-        # Remove visit from instances_by_date index
-        self._instance_by_date[old_date].remove(self.id)
 
         # Save and update instance lists
         self.write_obj()
@@ -793,7 +781,7 @@ class Visit(DataManagerMixin):
             "Time Window": f"{obj.time_earliest} - {obj.time_latest}"
         }
 
-        # If user confirms information is correct, a new object is created, written, and added to _tracked_instances
+        # If user confirms information is correct, a new object is created and written to database
         if not validate.confirm_info(obj, detail_dict):
             # Delete pat id attr if not created to also remove from patient.
             del obj.pat_id
@@ -801,10 +789,6 @@ class Visit(DataManagerMixin):
             return 0
 
         return 1
-
-    @classmethod
-    def load_tracked_instances(cls):
-        in_out.load_tracked_obj(cls)
 
     def inactivate_self(self):
         """This method sets the status of a visit request to inactive and the sched status to "cancelled".
@@ -880,45 +864,40 @@ class Visit(DataManagerMixin):
     @classmethod
     def evaluate_requests(cls):
         """Evaluates all Visits and marks them as no shows if they are past their expected date"""
-        for instance in cls._tracked_instances:
-            try:
-                with open(f"./data/{cls.__qualname__}/{instance['id']}", "rb") as read_file:
-                    visit = pickle.load(read_file)
+        # TODO: Update to use context manager
+        session = cls.Session()
 
-                    # Evaluate date against current date and mark as expired if due before current date
-                    if datetime.strptime(visit.exp_date, '%d-%m-%Y').date() < date.today():
-                        visit.status = 0
-                        visit.cancel_reason = cls._c_cancel_reason[3]
+        for visit in session.query(Visit).distinct().all():
+            # Evaluate date against current date and mark as expired if due before current date
+            if datetime.strptime(visit.exp_date, '%d-%m-%Y').date() < date.today():
+                visit.status = 0
+                visit.cancel_reason = cls._c_cancel_reason[3]
 
-                        # Remove visit from patient's list
-                        patient = in_out.load_obj(classes.person.Patient, f"./data/Patient/{visit._pat_id}.pkl")
+                # Remove visit from patient's list
+                patient = classes.person.Patient.load_obj(visit._pat_id)
 
-                        # If any linked patient fails to load, refresh and cancel action.
-                        if not patient:
-                            print("Unable to load linked patient.")
-                            visit.refresh_self()
-                            return 0
+                # If any linked patient fails to load, refresh and cancel action.
+                if not patient:
+                    print("Unable to load linked patient.")
+                    visit.refresh_self()
+                    return 0
 
-                        patient.visits[visit.exp_date].remove(visit.id)
-                        patient.write_self()
+                patient.visits[visit.exp_date].remove(visit.id)
+                patient.write_obj()
 
-                        # Remove visit from assigned clinician
-                        clin = in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{visit._clin_id}.pkl")
+                # Remove visit from assigned clinician
+                clin = classes.person.Clinician.load_obj(visit._clin_id)
 
-                        # If linked clinician fails to load, refresh and cancel action.
-                        if not clin:
-                            print("Unable to load linked clinician.")
-                            visit.refresh_self()
-                            return 0
+                # If linked clinician fails to load, refresh and cancel action.
+                if not clin:
+                    print("Unable to load linked clinician.")
+                    visit.refresh_self()
+                    return 0
 
-                        clin.visits[visit.exp_date].remove(visit.id)
-                        clin.write_self()
+                clin.visits[visit.exp_date].remove(visit.id)
+                clin.write_obj()
 
-                        cls.write_self(visit)
-
-            except FileNotFoundError as err:
-                print("File could not be found.")
-                return err
+                visit.write_obj()
 
     # TODO: Add a class method to reactivate a record
     # TODO: Add a method to find all visits today without a clinician

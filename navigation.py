@@ -1,6 +1,5 @@
 # This file contains functions to be used in the creating the GUI.
 # Stick with TUI for now, but launch completed map into web-browser or GUI
-import in_out
 import validate
 import geolocation
 import os

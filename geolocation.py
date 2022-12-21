@@ -7,7 +7,6 @@ import pandas as pd
 import numpy as np
 import validate
 import navigation
-import in_out
 import classes
 import boto3
 import requests
