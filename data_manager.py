@@ -1,6 +1,6 @@
 import pathlib
 import validate
-from sqlalchemy.orm import sessionmaker, registry
+from sqlalchemy.orm import sessionmaker, registry, reconstructor
 from sqlalchemy import create_engine
 from contextlib import contextmanager
 import pandas as pd
@@ -26,21 +26,23 @@ class DataManagerMixin:
     # Create mapper registry
     mapper_registry = registry()
 
+    def __init__(self):
+        self.session = self.Session()
+
     @contextmanager
     def session_scope(self):
         """
         Provides a transactional scope around a series of operations.
         :return: None
         """
-        session = self.Session()
         try:
-            yield session
-            session.commit()
+            yield self.session
+            self.session.commit()
         except:
-            session.rollback()
+            self.session.rollback()
             raise
         finally:
-            session.close()
+            self.session.close()
 
     @classmethod
     def create_tables(cls):
@@ -110,6 +112,7 @@ class DataManagerMixin:
 
         # Load object from table
         obj = session.query(cls).filter(cls._id == obj_id).first()
+        obj.session = session
 
         if inc_inac and not obj.status:
             # If set to only show active and record is inactive, return that this record is inactive.
@@ -117,6 +120,12 @@ class DataManagerMixin:
             return 0
 
         return obj
+
+    def refresh_self(self):
+        """Refreshes an existing object from file in the in case users need to backout changes."""
+        print("Reverting changes...")
+        self.session.rollback()
+        self.session.refresh(self)
 
     @classmethod
     def generate_flat_file(cls):
@@ -229,3 +238,33 @@ class DataManagerMixin:
 
             except (FileNotFoundError, OSError):
                 print("File not found. Ensure the input file contains '.csv' at the end.")
+
+    def load_tracked_obj(cls):
+        """Class method to initialise all instances of a class from file. Modifies the class attribute tracked_instances.
+            This is uses to allow for quick searching by name, date of birth, and ID"""
+        # TODO: Convert to a database search rather than a IO
+        obj = cls.load_obj()
+
+        # Update tracked instance dictionary with new value (overwrites old values).
+        if isinstance(obj, classes.person.Human):
+            cls._tracked_instances[obj.id] = {"status": obj._status,
+                                              "name": obj._name,
+                                              "dob": obj._dob,
+                                              "sex": obj._sex}
+
+        elif isinstance(obj, classes.visits.Visit):
+            cls._tracked_instances[obj.id] = {"status": obj._status,
+                                              "date": obj._exp_date}
+
+            # Create or add to the search by date list for visits
+            try:
+                obj._instance_by_date[obj.exp_date].append(obj.id)
+
+            except KeyError:
+                obj._instance_by_date[obj.exp_date] = [obj.id]
+
+        else:
+            cls._tracked_instances[obj.id] = {"status": obj._status,
+                                              "name": obj._name}
+
+        next(cls._id_iter)

@@ -7,7 +7,6 @@ from classes.visits import Visit
 from classes.team import Team
 from data_manager import DataManagerMixin
 
-
 """
 Primary stream - sequence of events:
 - Generate list of Clinician
@@ -16,6 +15,7 @@ Primary stream - sequence of events:
 - Generate list of Team each day (networked to a patient and clinician via ID)
 - Calculate real distances between Clinician and Visits
 - Evaluate all permutations of routes and select optimal route
+- Plot routes on map
 
 Secondary actions available:
 - Update user, patient, visit, or team details
@@ -24,7 +24,6 @@ Secondary actions available:
 """
 
 # TODO: Determine how to create an audit log
-# TODO: Investigate how to create a database
 # TODO: Investigate how to automatically batch and run nightly
 # TODO: Determine how to deploy to a server
 

@@ -46,10 +46,10 @@ def main_menu(class_list):
 
         # TODO: Remove before deployment
         elif selection == "dev":
-            in_out.import_csv(classes.team.Team, "./investigation/team_import.csv")
-            in_out.import_csv(classes.person.Patient, "./investigation/pat_import.csv")
-            in_out.import_csv(classes.person.Clinician, "./investigation/clin_import.csv")
-            in_out.import_csv(classes.visits.Visit, "./investigation/visit_import.csv")
+            classes.team.Team.import_csv("./investigation/team_import.csv")
+            classes.person.Patient.import_csv("./investigation/pat_import.csv")
+            classes.person.Clinician.import_csv("./investigation/clin_import.csv")
+            classes.visits.Visit.import_csv("./investigation/visit_import.csv")
 
         else:
             print("Invalid selection.")
@@ -188,15 +188,15 @@ def import_export_menu(cls):
             return 0
 
         elif selection == "1":
-            in_out.generate_flat_file(cls)
+            cls.generate_flat_file()
             continue
 
         elif selection == "2":
-            in_out.export_csv(cls)
+            cls.export_csv()
             continue
 
         elif selection == "3":
-            in_out.import_csv(cls)
+            cls.import_csv()
             continue
 
         else:
@@ -222,13 +222,13 @@ def geo_feat():
             return 0
 
         elif selection == "1":
-            obj = classes.person.Clinician.load_self()
+            obj = classes.person.Clinician.get_obj()
             if not obj:
                 continue
             geolocation.optimize_route(obj)
 
         elif selection == "2":
-            obj = classes.team.Team.load_self()
+            obj = classes.team.Team.get_obj()
             if not obj:
                 continue
             geolocation.optimize_route(obj)
@@ -247,13 +247,13 @@ def geo_feat():
                     return 0
 
             if selection == "1":
-                obj = classes.person.Clinician.load_self()
+                obj = classes.person.Clinician.get_obj()
                 if not obj:
                     continue
                 geolocation.display_route(obj)
 
             elif selection == "2":
-                obj = classes.team.Team.load_self()
+                obj = classes.team.Team.get_obj()
                 if not obj:
                     continue
                 geolocation.display_route(obj)

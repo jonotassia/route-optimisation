@@ -49,11 +49,10 @@ def optimize_route(obj):
             sleep(1.5)
             return 0
 
-        clins = [in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{clin_id}.pkl") for clin_id in
-                 obj._clin_id]
+        clins = [classes.person.Clinician.load_obj(clin_id) for clin_id in obj._clin_id]
 
         # Grab patients linked to team
-        pats = [in_out.load_obj(classes.person.Patient, f"./data/Patient/{pat_id}.pkl") for pat_id in obj._pat_id]
+        pats = [classes.person.Patient(pat_id) for pat_id in obj._pat_id]
 
         # Grab all visits across all patients in team, then unpack for single list of team visits
         visits = []
@@ -66,7 +65,7 @@ def optimize_route(obj):
                 continue
 
             for visit_id in visit_group:
-                visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
+                visit = classes.visits.Visit.load_obj(visit_id)
                 visits.append(visit)
 
         if not visits:
@@ -87,7 +86,7 @@ def optimize_route(obj):
             return 0
 
         # Create a list of visits by loading all visits attached to the clinician if they are scheduled for input date.
-        visits = [in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl") for visit_id in visits_by_date]
+        visits = [classes.visits.Visit.load_obj(visit_id) for visit_id in visits_by_date]
 
     # Generate data for optimisation problem. Pass clinician as a list top proper handling.
     data_dict = generate_data(visits, clins)
@@ -893,8 +892,7 @@ def display_route(obj, val_date=None):
 
     # If team, load list of all linked clinicians
     if isinstance(obj, classes.team.Team):
-        clins = [in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{clin_id}.pkl") for clin_id in
-                 obj._clin_id]
+        clins = [classes.person.Clinician.load_obj(clin_id) for clin_id in obj._clin_id]
 
     # If clin, put clin into list for consistent handling
     elif isinstance(obj, classes.person.Clinician):
@@ -915,7 +913,7 @@ def display_route(obj, val_date=None):
 
         visit_list = []
         for visit_id in clin_visits:
-            visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
+            visit = classes.visits.Visit.load_obj(visit_id)
             visit_list.append(visit)
         visits.append(visit_list)
 

@@ -28,6 +28,8 @@ class Team(DataManagerMixin):
     def __init__(self, status=1, name=None, address=None, **kwargs):
         """Initializes a new request and links with pat_id. It contains the following attributes:
             req_id, pat_id, name, status, address, the earliest time, latest time, sched status, and cancel_reason"""
+        super().__init__()
+
         self._id = next(self._id_iter)
         self._name = name
         self.status = status
@@ -173,7 +175,7 @@ class Team(DataManagerMixin):
                 self.refresh_self()
                 return 0
 
-            self.write_self()
+            self.write_obj()
             return 1
 
     def update_address(self):
@@ -202,13 +204,8 @@ class Team(DataManagerMixin):
             self.refresh_self()
             return 0
 
-        self.write_self()
+        self.write_obj()
         return 1
-
-    def write_self(self):
-        """Writes the object to file as a .pkl using the pickle module"""
-        if in_out.write_obj(self):
-            return 1
 
     @classmethod
     def create_self(cls):
@@ -252,22 +249,6 @@ class Team(DataManagerMixin):
         obj.write_self()
         return obj
 
-    def refresh_self(self):
-        """Refreshes an existing object from file in the in case users need to back out changes. Returns the object"""
-        print("Reverting changes...")
-        in_out.load_obj(type(self), f"./data/{self.__class__.__name__}/{self.id}.pkl")
-
-    @classmethod
-    def load_self(cls):
-        """Class method to initialise the object from file. Returns the object"""
-        obj = in_out.get_obj(cls)
-
-        if not obj:
-            return 0
-
-        else:
-            return obj
-
     @classmethod
     def load_tracked_instances(cls):
         in_out.load_tracked_obj(cls)
@@ -302,7 +283,7 @@ class Team(DataManagerMixin):
         # Remove team from patients and clinicians
         if self._pat_id:
             for pat_id in self._pat_id:
-                pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{pat_id}.pkl")
+                pat = classes.person.Patient.load_obj(pat_id)
 
                 # If any linked patients fail to load, refresh and cancel action.
                 if not pat:
@@ -311,11 +292,11 @@ class Team(DataManagerMixin):
                     return 0
 
                 pat.team_id = None
-                pat.write_self()
+                pat.write_obj()
 
         if self._clin_id:
             for clin_id in self._clin_id:
-                clin = in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{clin_id}.pkl")
+                clin = classes.person.Clinician.load_obj(clin_id)
 
                 # If any linked clinicians fail to load, refresh and cancel action.
                 if not clin:
@@ -324,9 +305,9 @@ class Team(DataManagerMixin):
                     return 0
 
                 clin.team_id = None
-                clin.write_self()
+                clin.write_obj()
 
-        self.write_self()
+        self.write_obj()
         print("Record successfully inactivated.")
 
         return 1

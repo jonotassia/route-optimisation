@@ -194,29 +194,8 @@ class Human:
             print("Record not created.")
             return 0
 
-        obj.write_self()
+        obj.write_obj()
         return obj
-
-    def write_self(self):
-        """Writes the object to file as a .pkl using the pickle module"""
-        if in_out.write_obj(self):
-            return 1
-
-    def refresh_self(self):
-        """Refreshes an existing object from file in the in case users need to backout changes."""
-        print("Reverting changes...")
-        in_out.load_obj(type(self), f"./data/{self.__class__.__name__}/{self.id}.pkl")
-
-    @classmethod
-    def load_self(cls):
-        """Class method to initialise the object from file. Returns the object"""
-        obj = in_out.get_obj(cls)
-
-        if not obj:
-            return 0
-
-        else:
-            return obj
 
     @classmethod
     def load_tracked_instances(cls):
@@ -237,8 +216,6 @@ class Patient(Human, DataManagerMixin):
         Column("_sex", String),
         Column("_address", MutableDict.as_mutable(PickleType), nullable=True),
         Column("_team_id", Integer, ForeignKey("Team._id"), nullable=True),
-        Column("_discipline", String, nullable=True),
-        Column("_skill_list", MutableList.as_mutable(PickleType), nullable=True),
         Column("_visits", MutableDict.as_mutable(PickleType), nullable=True),
         Column("_death_date", Date, nullable=True),
         Column("_death_time", Time, nullable=True),
@@ -333,17 +310,17 @@ class Patient(Human, DataManagerMixin):
                 old_team_id = None
 
             # Inverse link team to person
-            team = in_out.load_obj(classes.team.Team, f"./data/Team/{value}.pkl")
+            team = classes.team.Team.load_obj(value)
 
             if self.id not in team._pat_id:
                 team._pat_id.append(self.id)
 
             # Remove from old team
             if old_team_id:
-                old_team = in_out.load_obj(classes.team.Team, f"./data/Team/{old_team_id}.pkl")
+                old_team = classes.team.Team.load_obj(old_team_id)
                 old_team._pat_id.remove(self.id)
 
-            team.write_self()
+            team.write_obj()
 
             self._team_id = value
 
@@ -353,14 +330,14 @@ class Patient(Human, DataManagerMixin):
     @team_id.deleter
     def team_id(self):
         # Load patient and create or add to the search by date list for visits
-        team = in_out.load_obj(classes.team.Team, f"./data/Team/{self.team_id}.pkl")
+        team = classes.team.Team.load_obj(self.team_id)
         team._pat_id.remove(self.id)
-        team.write_self()
+        team.write_obj()
 
     @property
     def team_name(self):
         if self.team_id:
-            return classes.team.Team._tracked_instances[self.team_id]["name"]
+            return self.session.query(classes.team.Team).filter(classes.team.Team._id == self._team_id).first().name
 
         else:
             return None
@@ -458,7 +435,7 @@ class Patient(Human, DataManagerMixin):
 
         # Display list of requests linked to patient.
         for count, visit_id in enumerate(visits_by_date):
-            visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
+            visit = classes.visits.Visit.load_obj(visit_id)
 
             print(f"{count + 1}) Visit ID: {visit.id}"
                   f"    Scheduling Status: {visit.sched_status.capitalize()}"
@@ -473,6 +450,7 @@ class Patient(Human, DataManagerMixin):
             if not selection:
                 return 0
 
+            # TODO: Update to query db
             # Raise error if not in list
             visit_id = validate.valid_cat_list(selection, visits_by_date)
 
@@ -480,7 +458,7 @@ class Patient(Human, DataManagerMixin):
                 print("Invalid selection.")
                 continue
 
-            visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
+            visit = classes.visits.Visit.load_obj(visit_id)
             visit.update_self()
 
             return 1
@@ -511,7 +489,7 @@ class Patient(Human, DataManagerMixin):
             self.refresh_self()
             return 0
 
-        self.write_self()
+        self.write_obj()
         return 1
 
     def update_skill_pref(self):
@@ -526,7 +504,7 @@ class Patient(Human, DataManagerMixin):
         # Allow user to select team either by name or id, then load to an object
         print(f"Select a team to add to this {self.__class__.__name__}. Current: {self.team_name if self.team_name else 'None'}")
 
-        team = in_out.get_obj(classes.team.Team)
+        team = classes.team.Team.get_obj()
 
         if not team:
             sleep(1)
@@ -547,7 +525,7 @@ class Patient(Human, DataManagerMixin):
             return 0
 
         self.team_id = team_id
-        self.write_self()
+        self.write_obj()
         return 1
 
     def inactivate_self(self):
@@ -613,7 +591,7 @@ class Patient(Human, DataManagerMixin):
             if self.visits:
                 for visit_list in self.visits.values():
                     for visit_id in visit_list:
-                        visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}")
+                        visit = classes.visits.Visit.load_obj(visit_id)
 
                         # If any linked visits fail to load, refresh and cancel action.
                         if not visit:
@@ -624,13 +602,13 @@ class Patient(Human, DataManagerMixin):
                         visit.status = 0
                         visit.cancel_reason = visit._c_cancel_reason[4]
 
-                        visit.write_self()
+                        visit.write_obj()
 
                         print("Visits successfully cancelled.")
 
             # Remove from team
             if self.team_id:
-                team = in_out.load_obj(classes.team.Team, f"./data/Team/{self.team_id}")
+                team = classes.team.Team.load_obj(self.team_id)
 
                 # If linked team fails to load, refresh and cancel action.
                 if not team:
@@ -639,11 +617,11 @@ class Patient(Human, DataManagerMixin):
                     return 0
 
                 team.pat_id.remove(self.id)
-                team.write_self()
+                team.write_obj()
 
                 print("Team successfully unlinked.")
 
-            self.write_self()
+            self.write_obj()
 
             print("Record successfully inactivated.")
 
@@ -826,18 +804,18 @@ class Clinician(Human, DataManagerMixin):
                 old_team_id = None
 
             # Inverse link team to person
-            team = in_out.load_obj(classes.team.Team, f"./data/Team/{value}.pkl")
+            team = classes.team.Team.load_obj(self.team_id)
 
             if self.id not in team._clin_id:
                 team._clin_id.append(self.id)
 
             # Remove from old team
             if old_team_id:
-                old_team = in_out.load_obj(classes.team.Team, f"./data/Team/{old_team_id}.pkl")
+                old_team = classes.team.Team.load_obj(old_team_id)
                 old_team._clin_id.remove(self.id)
-                old_team.write_self()
+                old_team.write_obj()
 
-            team.write_self()
+            team.write_obj()
 
             self._team_id = value
 
@@ -847,14 +825,14 @@ class Clinician(Human, DataManagerMixin):
     @team_id.deleter
     def team_id(self):
         # Load patient and create or add to the search by date list for visits
-        team = in_out.load_obj(classes.team.Team, f"./data/Team/{self.team_id}.pkl")
+        team = classes.team.Team.load_obj(self.team_id)
         team._clin_id.remove(self.id)
-        team.write_self()
+        team.write_obj()
 
     @property
     def team_name(self):
         if self.team_id:
-            return classes.team.Team._tracked_instances[self.team_id]["name"]
+            return self.session.query(classes.team.Team).filter(classes.team.Team._id == self._team_id).first().name
 
         else:
             return None
@@ -1031,7 +1009,7 @@ class Clinician(Human, DataManagerMixin):
         visit_list = []
 
         for index, visit_id in enumerate(visits_by_date):
-            visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
+            visit = classes.visits.Visit.load_obj(visit_id)
 
             if not visit:
                 continue
@@ -1056,7 +1034,7 @@ class Clinician(Human, DataManagerMixin):
 
         # Load visit if valid id and go to visit menu
         else:
-            visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
+            visit = classes.visits.Visit.load_obj(visit_id)
             visit.update_self()
             return 1
 
@@ -1101,7 +1079,7 @@ class Clinician(Human, DataManagerMixin):
             self.refresh_self()
             return 0
 
-        self.write_self()
+        self.write_obj()
 
         return 1
 
@@ -1131,7 +1109,7 @@ class Clinician(Human, DataManagerMixin):
             self.refresh_self()
             return 0
 
-        self.write_self()
+        self.write_obj()
         return 1
 
     def modify_discipline(self):
@@ -1161,7 +1139,7 @@ class Clinician(Human, DataManagerMixin):
             self.refresh_self()
             return 0
 
-        self.write_self()
+        self.write_obj()
         return 1
 
     def modify_skills(self):
@@ -1194,7 +1172,7 @@ class Clinician(Human, DataManagerMixin):
             self.refresh_self()
             return 0
 
-        self.write_self()
+        self.write_obj()
         return 1
 
     def optimize_route(self):
@@ -1212,7 +1190,7 @@ class Clinician(Human, DataManagerMixin):
         # Allow user to select team either by name or id, then load to an object
         print(f"Select a team to add to this {self.__class__.__name__}. Current: {self.team_name if self.team_name else 'None'}")
 
-        team = in_out.get_obj(classes.team.Team)
+        team = classes.team.Team.load_obj(self._team_id)
 
         if not team:
             sleep(1)
@@ -1233,7 +1211,7 @@ class Clinician(Human, DataManagerMixin):
             return 0
 
         self.team_id = team_id
-        self.write_self()
+        self.write_obj()
         return 1
 
     def inactivate_self(self):
@@ -1276,7 +1254,7 @@ class Clinician(Human, DataManagerMixin):
             if self.visits:
                 for visit_list in self.visits.values():
                     for visit_id in visit_list:
-                        visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}")
+                        visit = classes.visits.Visit.load_obj(visit_id)
 
                         # If any linked visits fail to load, refresh and cancel action.
                         if not visit:
@@ -1287,12 +1265,12 @@ class Clinician(Human, DataManagerMixin):
                         # Remove clinician from visits and remove visits from clinician
                         visit._clin_id = None
                         self.visits = {}
-                        visit.write_self()
+                        visit.write_obj()
 
                         print("Visits successfully unassigned.")
 
             # Remove from team
-            team = in_out.load_obj(classes.team.Team, f"./data/Team/{self._team_id}")
+            team = classes.team.Team.load_obj(self._team_id)
 
             # If linked team fails to load, refresh and cancel action.
             if not team:
@@ -1301,11 +1279,11 @@ class Clinician(Human, DataManagerMixin):
                 return 0
 
             team.clin_id.remove(self.id)
-            team.write_self()
+            team.write_obj()
 
             print("Team successfully unlinked.")
 
-            self.write_self()
+            self.write_obj()
 
             print("Record successfully inactivated.")
 
