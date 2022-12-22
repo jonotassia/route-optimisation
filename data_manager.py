@@ -1,11 +1,10 @@
 import pathlib
 import validate
-from sqlalchemy.orm import sessionmaker, registry
+from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy import create_engine
 from contextlib import contextmanager
 import pandas as pd
 import time
-
 
 class DataManagerMixin:
     """
@@ -23,12 +22,12 @@ class DataManagerMixin:
     # Create and configure a sessionmaker class which we use to populate each individual table.
     Session = sessionmaker(bind=engine)
 
-    # Create mapper registry
-    mapper_registry = registry()
+    # Create declarative base for generating table classes
+    Base = declarative_base()
 
-    def __init__(self, session):
+    def __init__(self):
         # Init only used when importing. Otherwise, session is managed more granularly
-        self.session = session
+        self.session = self.Session()
 
     @classmethod
     @contextmanager
@@ -54,7 +53,7 @@ class DataManagerMixin:
         Creates tables based on metadata provided. This will convert the __table__ attribute
         :return: None
         """
-        cls.mapper_registry.metadata.create_all(cls.engine)
+        cls.Base.metadata.create_all(cls.engine)
 
     def write_obj(self, session, override=1):
         """
@@ -122,12 +121,13 @@ class DataManagerMixin:
 
         return obj
 
-    def refresh_self(self, session):
+    def refresh_self(self):
         """Refreshes an existing object from file in the in case users need to backout changes."""
         # TODO: Remove once context manager implemented
         print("Reverting changes...")
-        session.rollback()
-        session.refresh(self)
+        self.Session.object_session(self).rollback()
+        self.Session.object_session(self).refresh(self)
+
 
     @classmethod
     def generate_flat_file(cls):
@@ -231,12 +231,10 @@ class DataManagerMixin:
 
                 # Loop through each dict from the import and initialize + save a new object
                 for data in data_dict_list:
-                    obj = cls(session=session, **data)
+                    obj = cls(**data)
                     obj.write_obj(session)
 
                 print("Import successful.")
-                time.sleep(1)
-
                 return 1
 
             except (FileNotFoundError, OSError):

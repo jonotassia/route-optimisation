@@ -1,36 +1,33 @@
 # This file contains the Visit class to be used in the route optimisation tool.
 import itertools
-from sqlalchemy import Column, String, Integer, PickleType, Table, ForeignKey
-from sqlalchemy.ext.mutable import MutableList, MutableDict
+from sqlalchemy import Column, String, Integer, PickleType
+from sqlalchemy.orm import relationship
+from sqlalchemy.ext.mutable import MutableDict
 from data_manager import DataManagerMixin
 import geolocation
 import validate
-import classes
 import navigation
 
 
-@DataManagerMixin.mapper_registry.mapped
-class Team(DataManagerMixin):
-    __table__ = Table(
-        "Team",
-        DataManagerMixin.mapper_registry.metadata,
-        Column("_id", Integer, primary_key=True, unique=True),
-        Column("name", String),
-        Column("_pat_id", MutableList.as_mutable(PickleType), ForeignKey("Patient._id"), nullable=True),
-        Column("_clin_id", MutableList.as_mutable(PickleType), ForeignKey("Clinician._id"), nullable=True),
-        Column("_status", String, nullable=True),
-        Column("address", MutableDict.as_mutable(PickleType), nullable=True)
-    )
+class Team(DataManagerMixin, DataManagerMixin.Base):
+    # Initialise table details
+    __tablename__ = "Team"
+    _id = Column(Integer, primary_key=True, unique=True)
+    _name = Column(String)
+    pats = relationship("Patient", back_populates="team")
+    clins = relationship("Clinician", back_populates="team")
+    _status = Column(String, nullable=True)
+    _address = Column(MutableDict.as_mutable(PickleType), nullable=True)
 
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
 
-    def __init__(self, session=None, status=1, name=None, address=None, **kwargs):
+    def __init__(self, status=1, name=None, address=None, **kwargs):
         """Initializes a new request and links with pat_id. It contains the following attributes:
             req_id, pat_id, name, status, address, the earliest time, latest time, sched status, and cancel_reason"""
-        super().__init__(session=session)
+        super().__init__()
 
         self._id = next(self._id_iter)
-        self.name = name
+        self._name = name
         self.status = status
         self._pat_id = []
         self._clin_id = []
@@ -137,13 +134,11 @@ class Team(DataManagerMixin):
 
             # Optimize route
             elif selection == "3":
-                with self.session_scope() as session:
-                    self.optimize_route(session)
+                self.optimize_route()
 
             # display route
             elif selection == "4":
-                with self.session_scope() as session:
-                    self.display_route(session)
+                self.display_route()
 
             # Inactivate record
             elif selection == "5":
@@ -285,29 +280,25 @@ class Team(DataManagerMixin):
         self.status = 0
 
         # Remove team from patients and clinicians
-        if self._pat_id:
-            for pat_id in self._pat_id:
-                pat = classes.person.Patient.load_obj(self.session, pat_id)
-
+        if self.pats:
+            for pat in self.pats:
                 # If any linked patients fail to load, refresh and cancel action.
                 if not pat:
                     print("Unable to load linked patient.")
                     self.refresh_self(self.session)
                     return 0
 
-                pat.team_id = None
+                pat._team_id = None
 
-        if self._clin_id:
-            for clin_id in self._clin_id:
-                clin = classes.person.Clinician.load_obj(self.session, clin_id)
-
+        if self.clins:
+            for clin in self.clins:
                 # If any linked clinicians fail to load, refresh and cancel action.
                 if not clin:
                     print("Unable to load linked clinician.")
                     self.refresh_self(self.session)
                     return 0
 
-                clin.team_id = None
+                clin._team_id = None
 
         self.write_obj(self.session)
         print("Record successfully inactivated.")
@@ -317,14 +308,12 @@ class Team(DataManagerMixin):
     def optimize_route(self, session):
         """
         Calculates the estimated route for all clinicians on the team.
-        :param session: Session for querying database
         """
-        geolocation.optimize_route(self, session)
+        geolocation.optimize_route(self)
 
     def display_route(self, session):
         """
         Displays the route for all clinicians on the team.
-        :param session: Session for querying database
         """
-        geolocation.display_route(self, session)
+        geolocation.display_route(self)
     # TODO: Add a class method to reactivate a record

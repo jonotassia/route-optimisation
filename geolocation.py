@@ -16,12 +16,11 @@ import datetime
 from time import sleep
 
 
-def optimize_route(obj, session):
+def optimize_route(obj):
     """
     Optimizes a single or team of clinicians' schedule for the day based on distance traveled for all assigned visits on
     that day. This uses a combination of Google's distance matrix API and Google OR tools.
     :param obj: Clinician or team to optimize
-    :param session: Session for querying database
     :return: List of tuples of appointment coordinates for optimal travel time
     """
     # Get date to optimise
@@ -32,7 +31,7 @@ def optimize_route(obj, session):
             return 0
 
         try:
-            val_date = validate.valid_date(inp_date).date().strftime("%d/%m/%Y")
+            val_date = validate.valid_date(inp_date).date()
 
         except AttributeError:
             print("Invalid date format.")
@@ -44,29 +43,23 @@ def optimize_route(obj, session):
     # If team, load list of all linked clinicians
     if isinstance(obj, classes.team.Team):
         # Cancel if team is empty
-        if not obj.pat_load:
-            print("This team does not have any patients associated with it. Exiting...")
+        if not obj.pats:
+            print("This team does not have any patients associated with it. Returning...")
             sleep(1.5)
             return 0
 
-        clins = [classes.person.Clinician.load_obj(session, clin_id) for clin_id in obj._clin_id]
+        if not obj.clins:
+            print("This team does not have any clinicians associated with it. Returning...")
+            sleep(1.5)
+            return 0
+
+        clins = obj.clins
 
         # Grab patients linked to team
-        pats = [classes.person.Patient.load_obj(session, pat_id) for pat_id in obj._pat_id]
+        pats = obj.pats
 
         # Grab all visits across all patients in team, then unpack for single list of team visits
-        visits = []
-
-        for pat in pats:
-            # Handle key errors for patients who do not have visits on the designated day
-            try:
-                visit_group = pat.visits[val_date]
-            except KeyError:
-                continue
-
-            for visit_id in visit_group:
-                visit = classes.visits.Visit.load_obj(session, visit_id)
-                visits.append(visit)
+        visits = [visit for pat in pats for visit in pat.visits if visit._exp_date == val_date]
 
         if not visits:
             print("There are no visits assigned on this date. Returning...")
@@ -77,16 +70,12 @@ def optimize_route(obj, session):
     elif isinstance(obj, classes.person.Clinician):
         clins = [obj]
 
-        try:
-            visits_by_date = obj.visits[val_date]
+        visits = [visit for visit in obj.visits if visit._exp_date == val_date]
 
-        except KeyError:
+        if not visits:
             print("There are no visits assigned on this date. Returning...")
             sleep(1.5)
             return 0
-
-        # Create a list of visits by loading all visits attached to the clinician if they are scheduled for input date.
-        visits = [classes.visits.Visit.load_obj(session, visit_id) for visit_id in visits_by_date]
 
     # Generate data for optimisation problem. Pass clinician as a list top proper handling.
     data_dict = generate_data(visits, clins)
@@ -604,7 +593,7 @@ def return_solution(clins, visits, n_start_list, dropped_nodes, manager, routing
             disj_reason = dropped_nodes[node]
             node = node - n_start_list
             print(
-                f"{node}) {visits[node].patient_name}: {visits[node].time_earliest} - {visits[node].time_latest}, "
+                f"{node}) {visits[node].pat._name}: {visits[node].time_earliest} - {visits[node].time_latest}, "
                 f"Priority: {visits[node].visit_priority}, Complexity: {visits[node].visit_complexity}, "
                 f"Disjunction Reason: {disj_reason}")
 
@@ -633,7 +622,7 @@ def return_solution(clins, visits, n_start_list, dropped_nodes, manager, routing
             node = node - n_start_list
             dropped_nodes_dict[visits[node].id] = {
                 "Clinician": "UNASSIGNED",
-                "Patient Name": visits[node].patient_name,
+                "Patient Name": visits[node].pat._name,
                 "Start By": visits[node].time_earliest,
                 "Leave By": visits[node].time_latest,
                 "Priority": visits[node].visit_priority,
@@ -735,7 +724,7 @@ def print_to_screen(clin_index, clin, visits, n_start_list, manager, routing, so
         time_var = time_dimension.CumulVar(index)
         start_hours, start_min = divmod(solution.Min(time_var), 60)
         end_hours, end_min = divmod(solution.Max(time_var), 60)
-        plan_output += f'  {visit.patient_name} ' \
+        plan_output += f'  {visit.pat._name} ' \
                        f'(Start by: {datetime.time(hour=start_hours, minute=start_min).strftime("%H%M")}, ' \
                        f'Leave by: {datetime.time(hour=end_hours, minute=end_min).strftime("%H%M")}) ->'
         index = solution.Value(routing.NextVar(index))
@@ -785,7 +774,7 @@ def print_to_table(clin_index, clin, visits, n_start_list, manager, routing, sol
         end_hours, end_min = divmod(solution.Max(time_var), 60)
         solutions_dict[visit.id] = {
             "Clinician": clin.name,
-            "Patient Name": visit.patient_name,
+            "Patient Name": visit.pat._name,
             "Start By": datetime.time(hour=start_hours, minute=start_min).strftime("%H%M"),
             "Leave By": datetime.time(hour=end_hours, minute=end_min).strftime("%H%M"),
             "Priority": visit.visit_priority,
@@ -861,11 +850,10 @@ def number_icon(color, number):
     return icon
 
 
-def display_route(obj, session, val_date=None):
+def display_route(obj, val_date=None):
     """
     Menu for mapping functions
     :param obj: The object from which to gather the route (Team or Clinician only!)
-    :param session: Session for querying database
     :param val_date: The date to optimize the route for. If passed through, user is not prompted.
     :return: 0 if nothing is selected
     """
@@ -879,7 +867,7 @@ def display_route(obj, session, val_date=None):
                 return 0
 
             try:
-                val_date = validate.valid_date(inp_date).date().strftime("%d/%m/%Y")
+                val_date = validate.valid_date(inp_date).date()
 
             except AttributeError:
                 print("Invalid date format.")
@@ -890,7 +878,7 @@ def display_route(obj, session, val_date=None):
 
     # If team, load list of all linked clinicians
     if isinstance(obj, classes.team.Team):
-        clins = [classes.person.Clinician.load_obj(session, clin_id) for clin_id in obj._clin_id]
+        clins = obj.clins
 
     # If clin, put clin into list for consistent handling
     elif isinstance(obj, classes.person.Clinician):
@@ -900,20 +888,8 @@ def display_route(obj, session, val_date=None):
         print("Invalid object. Returning...")
         return 0
 
-    # Load list of visits for each clinician
-    visits = []
-    for clin in clins:
-        # Handle key errors for clinicians who do not have visits on the designated day
-        try:
-            clin_visits = clin.visits[val_date]
-        except KeyError:
-            continue
-
-        visit_list = []
-        for visit_id in clin_visits:
-            visit = classes.visits.Visit.load_obj(session, visit_id)
-            visit_list.append(visit)
-        visits.append(visit_list)
+    # Load list of visits for each clinician as a list of lists
+    visits = [[visit for visit in clin.visits if visit._exp_date == val_date] for clin in clins]
 
     # Prompt user for which type of map to load
     print("Please select how you would like to view the route:\n"
@@ -980,7 +956,7 @@ def map_markers_only(clins, visits):
         # Loop through visit coordinates and mark on map
         for visit_index, coord in enumerate(visit_locations[clin_index]):
             visit_tooltip = f"""
-                        <center><h4>{visit_index + 1}. {visits[clin_index][visit_index].patient_name}</h4></center>
+                        <center><h4>{visit_index + 1}. {visits[clin_index][visit_index].pat._name}</h4></center>
                         <p><b>Address</b>: {visits[clin_index][visit_index].address}</p>
                         <p><b>Time Window</b>: {visits[clin_index][visit_index].time_earliest} - {visits[clin_index][visit_index].time_latest}</p>
                         <p><b>Priority</b>: {visits[clin_index][visit_index].visit_priority}</p>
@@ -1126,7 +1102,7 @@ def map_markers_and_polyline(clins, visits):
                 sub_route_group.add_child(folium.PolyLine(coords, weight=3, color=color_list[clin_index]))
 
                 visit_tooltip = f"""
-                            <center><h4>{visit_index + 1}. {visit.patient_name}</h4></center>
+                            <center><h4>{visit_index + 1}. {visit.pat._name}</h4></center>
                             <p><b>Address</b>: {visit.address}</p>
                             <p><b>Time Window</b>: {visit.time_earliest} - {visit.time_latest}</p>
                             <p><b>Priority</b>: {visit.visit_priority}</p>

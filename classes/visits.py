@@ -3,31 +3,31 @@ import itertools
 import validate
 import classes
 import navigation
-from sqlalchemy import Column, String, Date, Time, Integer, PickleType, Table, ForeignKey
+from sqlalchemy import Column, String, Date, Time, Integer, PickleType, ForeignKey
 from sqlalchemy.ext.mutable import MutableList
+from sqlalchemy.orm import relationship
 from data_manager import DataManagerMixin
 from datetime import datetime, date
 
 
-@DataManagerMixin.mapper_registry.mapped
-class Visit(DataManagerMixin):
-    __table__ = Table(
-        "Visit",
-        DataManagerMixin.mapper_registry.metadata,
-        Column("_id", Integer, primary_key=True, unique=True),
-        Column("_pat_id", Integer, ForeignKey("Patient._id")),
-        Column("_clin_id", Integer, ForeignKey("Clinician._id"), nullable=True),
-        Column("_exp_date", Date, nullable=True),
-        Column("_status", String, nullable=True),
-        Column("_time_earliest", Time, nullable=True),
-        Column("_time_latest", Time, nullable=True),
-        Column("_visit_priority", String, nullable=True),
-        Column("_visit_complexity", String, nullable=True),
-        Column("_skill_list", MutableList.as_mutable(PickleType), nullable=True),
-        Column("_discipline", String, nullable=True),
-        Column("_cancel_reason", String, nullable=True),
-        Column("_sched_status", String, nullable=True)
-    )
+class Visit(DataManagerMixin, DataManagerMixin.Base):
+    # Initialise table details
+    __tablename__ = "Visit"
+    _id = Column(Integer, primary_key=True, unique=True)
+    _pat_id = Column(Integer, ForeignKey("Patient._id"))
+    pat = relationship("Patient", back_populates="visits")
+    _clin_id = Column(Integer, ForeignKey("Clinician._id"), nullable=True)
+    clin = relationship("Clinician", back_populates="visits")
+    _exp_date = Column(Date, nullable=True)
+    _status = Column(String, nullable=True)
+    _time_earliest = Column(Time, nullable=True)
+    _time_latest = Column(Time, nullable=True)
+    _visit_priority = Column(String, nullable=True)
+    _visit_complexity = Column( String, nullable=True)
+    _skill_list = Column(MutableList.as_mutable(PickleType), nullable=True)
+    _discipline = Column(String, nullable=True)
+    _cancel_reason = Column(String, nullable=True)
+    _sched_status = Column(String, nullable=True)
 
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
     _c_visit_complexity = ("simple", "routine", "complex")
@@ -37,12 +37,12 @@ class Visit(DataManagerMixin):
     _c_sched_status = ("unassigned", "assigned", "no show", "cancelled")
     _c_cancel_reason = ("clinician unavailable", "patient unavailable", "no longer needed", "expired", "system action")
 
-    def __init__(self, pat_id, session=None, clin_id=None, status=1, sched_status="unscheduled", time_earliest="", time_latest="",
+    def __init__(self, pat_id, clin_id=None, status=1, sched_status="unscheduled", time_earliest="", time_latest="",
                  exp_date="", visit_complexity=_c_visit_complexity[1], visit_priority=_c_visit_priority[0],
                  skill_list=[], discipline="", **kwargs):
         """Initializes a new request and links with pat_id. It contains the following attributes:
             req_id, pat_id, name, status, the earliest time, latest time, sched status, and cancel_reason"""
-        super().__init__(session=session)
+        super().__init__()
 
         self._id = next(self._id_iter)
         self.exp_date = exp_date
@@ -93,47 +93,12 @@ class Visit(DataManagerMixin):
 
     @pat_id.setter
     def pat_id(self, value):
-        # NOTE: Unnecessary to have code to remove from old patient because this should only ever be set once
         # Check valid ID and oad patient and create or add to the search by date list for visits
-        if pat := classes.person.Patient.load_obj(self.session, value):
-            # Add visit to patient if not already listed
-            try:
-                if self.id not in pat.visits[self.exp_date]:
-                    pat.visits[self.exp_date].append(self.id)
-
-            except KeyError:
-                pat.visits[self.exp_date] = [self.id]
-
+        if classes.person.Patient.load_obj(self.session, value):
             self._pat_id = value
 
         else:
             raise ValueError("This is not a valid patient ID.\n")
-
-    @pat_id.deleter
-    def pat_id(self):
-        # Load patient and create or add to the search by date list for visits.
-        pat = classes.person.Patient.load_obj(self.session, self.pat_id)
-        try:
-            pat.visits[self.exp_date].remove(self.id)
-
-        except KeyError:
-            pat.visits[self.exp_date] = [self.id]
-
-    @property
-    def patient_name(self):
-        if self._pat_id:
-            name = self.session.query(classes.person.Patient).filter(
-                classes.person.Patient._id == self._pat_id).first().name
-            try:
-                middle_name = name[2]
-
-            except TypeError:
-                middle_name = None
-
-            return f"{name[0]}, {name[1]} {middle_name}"
-
-        else:
-            return None
 
     @property
     def clin_id(self):
@@ -145,55 +110,13 @@ class Visit(DataManagerMixin):
         if not value:
             self._clin_id = None
 
-        elif clin := classes.person.Clinician.load_obj(self.session, value):
-            # Load clinician and create or add to the search by date list for visits
-            old_clin_id = self._clin_id
-
-            # Remove from old clinician if there is one
-            if old_clin_id:
-                if old_clin_id != value:
-                    old_clin = classes.person.Clinician.load_obj(self.session, old_clin_id)
-                    old_clin.visits[self.exp_date].remove(self.id)
-
-            # If the visit is not already assigned to the clinician, assign it
-            try:
-                if self.id not in clin.visits[self.exp_date]:
-                    clin.visits[self.exp_date].append(self.id)
-
-            except KeyError:
-                clin.visits[self.exp_date] = [self.id]
-
+        # If clin exists, add to visit
+        elif classes.person.Clinician.load_obj(self.session, value):
             self._clin_id = value
             self.sched_status = "assigned"
 
         else:
             raise ValueError("This is not a valid clinician ID.\n")
-
-    @clin_id.deleter
-    def clin_id(self):
-        # Load patient and create or add to the search by date list for visits
-        clin = classes.person.Clinician.load_obj(self.session, self._clin_id)
-        try:
-            clin.visits[self.exp_date].remove(self.id)
-
-        except KeyError:
-            clin.visits[self.exp_date] = [self.id]
-
-    @property
-    def clinician_name(self):
-        if self._clin_id:
-            name = self.session.query(classes.person.Clinician).filter(
-                classes.person.Clinician._id == self._clin_id).first().name
-            try:
-                middle_name = self._name[2]
-
-            except TypeError:
-                middle_name = None
-
-            return f"{name[0]}, {name[1]} {middle_name}"
-
-        else:
-            return None
 
     @property
     def address(self):
@@ -231,6 +154,9 @@ class Visit(DataManagerMixin):
     @exp_date.setter
     def exp_date(self, value):
         """Checks values of expected date before assigning"""
+        if not value:
+            self._exp_date = None
+
         date = validate.valid_date(value)
 
         if isinstance(date, Exception):
@@ -240,28 +166,6 @@ class Visit(DataManagerMixin):
             raise ValueError("Date cannot be before today.\n")
 
         else:
-            # Handle date changes if reimporting an existing visit by grabbing the old visit date from database
-            old_visit_date = self.session.query(Visit).filter(Visit._id == self.id).all()
-
-            if old_visit_date:
-                # Remove from patient if there is already an entry
-                try:
-                    pat = classes.person.Patient.load_obj(self.session, self.pat_id)
-                    if pat:
-                        pat.visits[old_visit_date].remove(self.id)
-
-                except KeyError:
-                    pass
-
-                # Remove from clinician if there is already an entry
-                try:
-                    clin = classes.person.Clinician.load_obj(self.session, self.clin_id)
-                    if clin:
-                        clin.visits[old_visit_date].remove(self.id)
-
-                except KeyError:
-                    pass
-
             self._exp_date = date
 
     @property
@@ -286,7 +190,7 @@ class Visit(DataManagerMixin):
     @time_latest.setter
     def time_latest(self, value):
         """Checks values of time window end before assigning"""
-        # TODO: Figure out how to handle the midnight instance in time window and scheduling
+        # TODO: Figure out how to handle the midnight instance in time window and scheduling (try using instants)
         time = validate.valid_time(value)
 
         if not isinstance(time, Exception):
@@ -495,7 +399,7 @@ class Visit(DataManagerMixin):
 
         # Update all attributes from above. Quit if user quits during any attribute
         if not validate.get_info(self, attr_list):
-            self.refresh_self(self.session)
+            self.refresh_self(self.Session.object_session())
             return 0
 
         # Save old date for searching and updating instances_by_date index
@@ -508,11 +412,11 @@ class Visit(DataManagerMixin):
 
         # If user does not confirm info, changes will be reverted.
         if not validate.confirm_info(self, detail_dict):
-            self.refresh_self(self.session)
+            self.refresh_self(self.Session.object_session())
             return 0
 
         # Save and update instance lists
-        self.write_obj(self.session)
+        self.write_obj(self.Session.object_session())
 
         return 1
 
@@ -582,17 +486,10 @@ class Visit(DataManagerMixin):
         Assigns the visit to a clinician.
         :return: 1 if successful
         """
-        # Remove visit from assigned clinician
-        clin = classes.person.Clinician.load_obj(self.session, self.clin_id)
-
         # If linked clinician fails to load, refresh and cancel action.
-        if not clin:
-            print("Unable to load linked clinician.")
-            self.refresh_self(self.session)
+        if not self._clin_id:
+            print("This patient does not have an assigned clinician.")
             return 0
-
-        # Remove visit from clinician and unassign clinician to visit
-        clin.visits[self.exp_date].remove(self.id)
 
         self._clin_id = ""
         self.write_obj(self.session)
@@ -607,8 +504,8 @@ class Visit(DataManagerMixin):
         # Output linked visit details
         detail_dict = {
             "Visit ID": self.id,
-            "Patient": self.patient_name,
-            "Clinician": self.clinician_name,
+            "Patient": self.pat._name,
+            "Clinician": self.clin._name,
             "Visit Address": self.address,
             "Expected Date": self.exp_date,
             "Time Window": f"{self.time_earliest} - {self.time_latest}"
@@ -702,7 +599,7 @@ class Visit(DataManagerMixin):
 
         # Update all attributes from above. Quit if user quits during any attribute
         if not validate.get_info(self, attr_list):
-            self.refresh_self(self.session)
+            self.refresh_self()
             return 0
 
         detail_dict = {
@@ -712,7 +609,7 @@ class Visit(DataManagerMixin):
 
         # If user does not confirm info, changes will be reverted.
         if not validate.confirm_info(self, detail_dict):
-            self.refresh_self(self.session)
+            self.refresh_self()
             return 0
 
         # Save and update instance lists
@@ -762,8 +659,6 @@ class Visit(DataManagerMixin):
 
         # Update all attributes from above. Quit if user quits during any attribute
         if not validate.get_info(obj, attr_list):
-            # Delete pat id attr if not created to also remove from patient.
-            del obj.pat_id
             return 0
 
         detail_dict = {
@@ -776,8 +671,6 @@ class Visit(DataManagerMixin):
 
         # If user confirms information is correct, a new object is created and written to database
         if not validate.confirm_info(obj, detail_dict):
-            # Delete pat id attr if not created to also remove from patient.
-            del obj.pat_id
             print("Record not created.")
             return 0
 
@@ -824,28 +717,6 @@ class Visit(DataManagerMixin):
 
             self.status = 0
 
-            # Remove visit from patient's list
-            patient = classes.person.Patient.load_obj(self.session, self.pat_id)
-
-            # If any linked patient fails to load, refresh and cancel action.
-            if not patient:
-                print("Unable to load linked patient.")
-                self.refresh_self(self.session)
-                return 0
-
-            patient.visits[self.exp_date].remove(self.id)
-
-            # Remove visit from assigned clinician
-            clin = classes.person.Clinician.load_obj(self.session, self.clin_id)
-
-            # If linked clinician fails to load, refresh and cancel action.
-            if not clin:
-                print("Unable to load linked clinician.")
-                self.refresh_self(self.session)
-                return 0
-
-            clin.visits[self.exp_date].remove(self.id)
-
             # Cancel visit
             self.write_obj(self.session)
             print("Visit successfully cancelled.")
@@ -855,7 +726,6 @@ class Visit(DataManagerMixin):
     @classmethod
     def evaluate_requests(cls):
         """Evaluates all Visits and marks them as no shows if they are past their expected date"""
-        # TODO: Update to use context manager
         with cls.session_scope() as session:
             for visit in session.query(Visit).distinct().all():
                 # Evaluate date against current date and mark as expired if due before current date
@@ -863,27 +733,6 @@ class Visit(DataManagerMixin):
                     visit.status = 0
                     visit.cancel_reason = cls._c_cancel_reason[3]
 
-                    # Remove visit from patient's list
-                    patient = classes.person.Patient.load_obj(session, visit._pat_id)
-
-                    # If any linked patient fails to load, refresh and cancel action.
-                    if not patient:
-                        print("Unable to load linked patient.")
-                        visit.refresh_self(session)
-                        return 0
-
-                    patient.visits[visit.exp_date].remove(visit.id)
-
-                    # Remove visit from assigned clinician
-                    clin = classes.person.Clinician.load_obj(session, visit._clin_id)
-
-                    # If linked clinician fails to load, refresh and cancel action.
-                    if not clin:
-                        print("Unable to load linked clinician.")
-                        visit.refresh_self(session)
-                        return 0
-
-                    clin.visits[visit.exp_date].remove(visit.id)
                     visit.write_obj(session)
 
     # TODO: Add a class method to reactivate a record
