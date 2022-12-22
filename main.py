@@ -35,9 +35,6 @@ def main():
     # Initialize a list of all classes and loop to populate instance tracking lists
     _class_list = (Patient, Clinician, Visit, Team)
 
-    for cls in _class_list:
-        cls.load_tracked_instances()
-
     navigation.main_menu(_class_list)
 
 

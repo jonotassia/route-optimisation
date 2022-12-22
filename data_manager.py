@@ -1,6 +1,6 @@
 import pathlib
 import validate
-from sqlalchemy.orm import sessionmaker, registry, reconstructor
+from sqlalchemy.orm import sessionmaker, registry
 from sqlalchemy import create_engine
 from contextlib import contextmanager
 import pandas as pd
@@ -26,23 +26,27 @@ class DataManagerMixin:
     # Create mapper registry
     mapper_registry = registry()
 
-    def __init__(self):
-        self.session = self.Session()
+    def __init__(self, session):
+        # Init only used when importing. Otherwise, session is managed more granularly
+        self.session = session
 
+    @classmethod
     @contextmanager
-    def session_scope(self):
+    def session_scope(cls):
         """
         Provides a transactional scope around a series of operations.
         :return: None
         """
+        session = cls.Session()
+
         try:
-            yield self.session
-            self.session.commit()
+            yield session
+            session.commit()
         except:
-            self.session.rollback()
+            session.rollback()
             raise
         finally:
-            self.session.close()
+            session.close()
 
     @classmethod
     def create_tables(cls):
@@ -52,22 +56,21 @@ class DataManagerMixin:
         """
         cls.mapper_registry.metadata.create_all(cls.engine)
 
-    def write_obj(self, override=1):
+    def write_obj(self, session, override=1):
         """
         Creates a new row in a table. Corresponding table is specified in the class of the object passed to this function.
-        :param obj: Object to write to table. The class of the object specifies the parameters of the table.
+        :param session: Session for querying database
         :param override: A flag to indicate whether an object can be overridden.
         :return: None
         """
         # Add the row to the table
-        with self.session_scope() as session:
-            if override:
-                session.merge(self)
-            else:
-                session.add(self)
+        if override:
+            session.merge(self)
+        else:
+            session.add(self)
 
     @classmethod
-    def get_obj(cls, inc_inac=0):
+    def get_obj(cls, session, inc_inac=0):
         """
         Class method to initialise a class instance from file. Returns the file as an object
         :param session: Session for querying database
@@ -86,33 +89,31 @@ class DataManagerMixin:
                 obj_id = search_obj
                 break
 
-            obj_id = validate.validate_obj_by_name(cls, search_obj, inc_inac=inc_inac)
+            obj_id = validate.validate_obj_by_name(cls, search_obj, session, inc_inac=inc_inac)
 
             if obj_id:
                 break
 
         # Generate and return object of class that is passed as argument
         if obj_id:
-            return cls.load_obj(obj_id, inc_inac=inc_inac)
+            return cls.load_obj(session, obj_id, inc_inac=inc_inac)
 
         else:
             print("Record not found.")
             return 0
 
     @classmethod
-    def load_obj(cls, obj_id, inc_inac=0):
+    def load_obj(cls, session, obj_id, inc_inac=0):
         """
         loads a row in a table as an object of corresponding class. Attributes for object based on table columns.
         :param cls: Class of object to load (directs to the relevant table)
+        :param session: Session for querying database
         :param obj_id: Object ID to write to table. The class of the object specifies the parameters of the table.
         :param inc_inac: Flags whether inactive records should be included
         :return: None
         """
-        session = cls.Session()
-
         # Load object from table
         obj = session.query(cls).filter(cls._id == obj_id).first()
-        obj.session = session
 
         if inc_inac and not obj.status:
             # If set to only show active and record is inactive, return that this record is inactive.
@@ -121,11 +122,12 @@ class DataManagerMixin:
 
         return obj
 
-    def refresh_self(self):
+    def refresh_self(self, session):
         """Refreshes an existing object from file in the in case users need to backout changes."""
+        # TODO: Remove once context manager implemented
         print("Reverting changes...")
-        self.session.rollback()
-        self.session.refresh(self)
+        session.rollback()
+        session.refresh(self)
 
     @classmethod
     def generate_flat_file(cls):
@@ -161,8 +163,8 @@ class DataManagerMixin:
     def export_csv(cls, session):
         """
         Generates a flat file for import. User can populate and import using read_csv()
-        :param session:
         :param cls: Class to generate flat file
+        :param session: Session for querying database
         :return: 1 if successful
         """
         # Get a list of params in the __init__ definition, and remove self and kwargs
@@ -171,7 +173,7 @@ class DataManagerMixin:
         # Initialize a blank list of objects to write, then populate with user's requested objects
         obj_data = []
         while True:
-            obj = cls.get_obj()
+            obj = cls.get_obj(session)
 
             if not obj:
                 break
@@ -204,10 +206,11 @@ class DataManagerMixin:
                 print("File not found. Ensure the input file contains '.csv' at the end.")
 
     @classmethod
-    def import_csv(cls, filepath=None):
+    def import_csv(cls, session, filepath=None):
         """
         Reads a file from csv and saves them as objects.
         :param cls: Class of object(s) to be created.
+        :param session: Session for querying database
         :param filepath: Filepath of CSV file
         :return: 1 if successful
         """
@@ -228,8 +231,8 @@ class DataManagerMixin:
 
                 # Loop through each dict from the import and initialize + save a new object
                 for data in data_dict_list:
-                    obj = cls(**data)
-                    obj.write_obj()
+                    obj = cls(session=session, **data)
+                    obj.write_obj(session)
 
                 print("Import successful.")
                 time.sleep(1)

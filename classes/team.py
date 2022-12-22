@@ -15,21 +15,22 @@ class Team(DataManagerMixin):
         "Team",
         DataManagerMixin.mapper_registry.metadata,
         Column("_id", Integer, primary_key=True, unique=True),
+        Column("name", String),
         Column("_pat_id", MutableList.as_mutable(PickleType), ForeignKey("Patient._id"), nullable=True),
         Column("_clin_id", MutableList.as_mutable(PickleType), ForeignKey("Clinician._id"), nullable=True),
         Column("_status", String, nullable=True),
-        Column("_address", MutableDict.as_mutable(PickleType), nullable=True)
+        Column("address", MutableDict.as_mutable(PickleType), nullable=True)
     )
 
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
 
-    def __init__(self, status=1, name=None, address=None, **kwargs):
+    def __init__(self, session=None, status=1, name=None, address=None, **kwargs):
         """Initializes a new request and links with pat_id. It contains the following attributes:
             req_id, pat_id, name, status, address, the earliest time, latest time, sched status, and cancel_reason"""
-        super().__init__()
+        super().__init__(session=session)
 
         self._id = next(self._id_iter)
-        self._name = name
+        self.name = name
         self.status = status
         self._pat_id = []
         self._clin_id = []
@@ -124,23 +125,31 @@ class Team(DataManagerMixin):
 
             # Update request date and time
             elif selection == "1":
-                self.update_name()
+                with self.session_scope() as session:
+                    self.session = session
+                    self.update_name()
 
             # Update request address
             elif selection == "2":
-                self.update_address()
+                with self.session_scope() as session:
+                    self.session = session
+                    self.update_address()
 
             # Optimize route
             elif selection == "3":
-                self.optimize_route()
+                with self.session_scope() as session:
+                    self.optimize_route(session)
 
             # display route
             elif selection == "4":
-                self.display_route()
+                with self.session_scope() as session:
+                    self.display_route(session)
 
             # Inactivate record
             elif selection == "5":
-                self.inactivate_self()
+                with self.session_scope() as session:
+                    self.session = session
+                    self.inactivate_self()
                 return 0
 
             else:
@@ -161,7 +170,7 @@ class Team(DataManagerMixin):
 
             # Update all attributes from above. Quit if user quits during any attribute
             if not validate.get_info(self, attr_list):
-                self.refresh_self()
+                self.refresh_self(self.session)
                 return 0
 
             detail_dict = {
@@ -170,10 +179,10 @@ class Team(DataManagerMixin):
 
             # If user does not confirm info, changes will be reverted.
             if not validate.confirm_info(self, detail_dict):
-                self.refresh_self()
+                self.refresh_self(self.session)
                 return 0
 
-            self.write_obj()
+            self.write_obj(self.session)
             return 1
 
     def update_address(self):
@@ -190,7 +199,7 @@ class Team(DataManagerMixin):
 
         # Update all attributes from above. Quit if user quits during any attribute
         if not validate.get_info(self, attr_list):
-            self.refresh_self()
+            self.refresh_self(self.session)
             return 0
 
         detail_dict = {
@@ -199,19 +208,20 @@ class Team(DataManagerMixin):
 
         # If user does not confirm info, changes will be reverted.
         if not validate.confirm_info(self, detail_dict):
-            self.refresh_self()
+            self.refresh_self(self.session)
             return 0
 
-        self.write_obj()
+        self.write_obj(self.session)
         return 1
 
     @classmethod
-    def create_self(cls):
+    def create_self(cls, session):
         """
         Loops through each detail and assigns to the object.
         If any response is blank, the user will be prompted to quit or continue.
         If they continue, they will begin at the element that the quit out of
         Once details are completed, the user is prompted to review information and complete creation.
+        :param session: Session for querying database
         :return:
             1 if the user completes initialization
             0 if the user does not
@@ -244,7 +254,7 @@ class Team(DataManagerMixin):
             print("Record not created.")
             return 0
 
-        obj.write_self()
+        obj.write_self(session)
         return obj
 
     def inactivate_self(self):
@@ -277,40 +287,44 @@ class Team(DataManagerMixin):
         # Remove team from patients and clinicians
         if self._pat_id:
             for pat_id in self._pat_id:
-                pat = classes.person.Patient.load_obj(pat_id)
+                pat = classes.person.Patient.load_obj(self.session, pat_id)
 
                 # If any linked patients fail to load, refresh and cancel action.
                 if not pat:
                     print("Unable to load linked patient.")
-                    self.refresh_self()
+                    self.refresh_self(self.session)
                     return 0
 
                 pat.team_id = None
-                pat.write_obj()
 
         if self._clin_id:
             for clin_id in self._clin_id:
-                clin = classes.person.Clinician.load_obj(clin_id)
+                clin = classes.person.Clinician.load_obj(self.session, clin_id)
 
                 # If any linked clinicians fail to load, refresh and cancel action.
                 if not clin:
                     print("Unable to load linked clinician.")
-                    self.refresh_self()
+                    self.refresh_self(self.session)
                     return 0
 
                 clin.team_id = None
-                clin.write_obj()
 
-        self.write_obj()
+        self.write_obj(self.session)
         print("Record successfully inactivated.")
 
         return 1
 
-    def optimize_route(self):
-        """Calculates the estimated route for all clinicians on the team."""
-        geolocation.optimize_route(self.id)
+    def optimize_route(self, session):
+        """
+        Calculates the estimated route for all clinicians on the team.
+        :param session: Session for querying database
+        """
+        geolocation.optimize_route(self, session)
 
-    def display_route(self):
-        """Displays the route for all clinicians on the team."""
-        geolocation.display_route(self.id)
+    def display_route(self, session):
+        """
+        Displays the route for all clinicians on the team.
+        :param session: Session for querying database
+        """
+        geolocation.display_route(self, session)
     # TODO: Add a class method to reactivate a record

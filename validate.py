@@ -306,21 +306,18 @@ def confirm_info(obj, detail_dict):
         return 1
 
 
-def validate_obj_by_name(cls, name, inc_inac=0):
+def validate_obj_by_name(cls, name, session, inc_inac=0):
     """
     Uses levenshtein distance to determine a ratio of distance.
     If a perfect match is found, it will return the id of the object.
     If it is not a perfect match, adds to the match_list and displays to user to select the correct record.
     :param cls: Class of object being searched.
     :param name: Name that is being searched.
+    :param session: Session for querying database
     :param inc_inac: Flags the search to include inactive records.
     :return: Object ID
     """
     navigation.clear()
-
-    # TODO: Update to use context manager
-    session = cls.Session()
-
     match_list = []
 
     for obj in session.query(cls).distinct().all():
@@ -343,7 +340,7 @@ def validate_obj_by_name(cls, name, inc_inac=0):
             # Otherwise, add to the match list if it
             elif lev_last_first > 0.6:
                 # Append ID to match list for user validation
-                match_list.append([obj.id, obj.name, obj.dob, obj.sex])
+                match_list.append(obj)
 
             # Measure similarity by levenshtein distance using First M Last notation.
             lev_first_last = levratio(first_last_str, name)
@@ -352,7 +349,7 @@ def validate_obj_by_name(cls, name, inc_inac=0):
                 return obj.id
 
             elif lev_first_last > 0.6:
-                match_list.append([obj.id, obj.name, obj.dob, obj.sex])
+                match_list.append(obj)
 
         # For non-person objects: Measure similarity by levenshtein distance.
         else:
@@ -362,7 +359,7 @@ def validate_obj_by_name(cls, name, inc_inac=0):
                 return obj.id
 
             elif lev_rat > 0.6:
-                match_list.append([obj.id, obj.name])
+                match_list.append(obj)
 
     # Print list of potential matches for user to select from
     if not match_list:
@@ -371,15 +368,15 @@ def validate_obj_by_name(cls, name, inc_inac=0):
 
     if issubclass(cls, classes.person.Human):
         for count, match in enumerate(match_list):
-            print(f"{count + 1}) ID: {match[0]}, "
-                  f"Name: {match[1][0]}, {match[1][1]} {match[1][2]}, "
-                  f"DOB: {match[2].strftime('%d/%m/%Y')}"
-                  f"Sex: {match[3]}"
+            print(f"{count + 1}) ID: {obj.id}, "
+                  f"Name: {obj.name} "
+                  f"DOB: {obj.dob} "
+                  f"Sex: {obj.sex.capitalize()}"
                   )
 
     else:
         for count, match in enumerate(match_list):
-            print(f"{count + 1}) ID: {match[0]}, Name: {match[1]}")
+            print(f"{count + 1}) ID: {obj.id}, Name: {obj.name}")
 
     # Prompt user to select option from above
     while True:
@@ -395,7 +392,7 @@ def validate_obj_by_name(cls, name, inc_inac=0):
 
             # Check response by index in match list
             if 0 < selection <= len(match_list):
-                obj_id = match_list[selection - 1][0]
+                obj_id = match_list[selection - 1].id
                 return obj_id
 
             # Prompt user to break if record does not exist

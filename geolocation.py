@@ -1,4 +1,4 @@
-# Contains functions related to geolocation using Placekey and mlrose
+# Contains functions related to geolocation using Google OR tools and map APIs. Folium for visualisation.
 import folium
 from folium import plugins
 import osmnx as ox
@@ -16,11 +16,12 @@ import datetime
 from time import sleep
 
 
-def optimize_route(obj):
+def optimize_route(obj, session):
     """
     Optimizes a single or team of clinicians' schedule for the day based on distance traveled for all assigned visits on
     that day. This uses a combination of Google's distance matrix API and Google OR tools.
-    :param obj: ID of clinician or team to optimize
+    :param obj: Clinician or team to optimize
+    :param session: Session for querying database
     :return: List of tuples of appointment coordinates for optimal travel time
     """
     # Get date to optimise
@@ -48,10 +49,10 @@ def optimize_route(obj):
             sleep(1.5)
             return 0
 
-        clins = [classes.person.Clinician.load_obj(clin_id) for clin_id in obj._clin_id]
+        clins = [classes.person.Clinician.load_obj(session, clin_id) for clin_id in obj._clin_id]
 
         # Grab patients linked to team
-        pats = [classes.person.Patient(pat_id) for pat_id in obj._pat_id]
+        pats = [classes.person.Patient.load_obj(session, pat_id) for pat_id in obj._pat_id]
 
         # Grab all visits across all patients in team, then unpack for single list of team visits
         visits = []
@@ -64,7 +65,7 @@ def optimize_route(obj):
                 continue
 
             for visit_id in visit_group:
-                visit = classes.visits.Visit.load_obj(visit_id)
+                visit = classes.visits.Visit.load_obj(session, visit_id)
                 visits.append(visit)
 
         if not visits:
@@ -85,7 +86,7 @@ def optimize_route(obj):
             return 0
 
         # Create a list of visits by loading all visits attached to the clinician if they are scheduled for input date.
-        visits = [classes.visits.Visit.load_obj(visit_id) for visit_id in visits_by_date]
+        visits = [classes.visits.Visit.load_obj(session, visit_id) for visit_id in visits_by_date]
 
     # Generate data for optimisation problem. Pass clinician as a list top proper handling.
     data_dict = generate_data(visits, clins)
@@ -372,7 +373,6 @@ def route_optimizer(dist_matrix, num_clinicians, start_list, end_list,
 def create_dist_matrix(plus_code_list):
     """
     Generates a distance matrix using place_ids.
-    :param clin: clinician used to extract start and end address
     :param plus_code_list: List of plus codes to calculate into a distance matrix
     :return: distance matrix
     """
@@ -557,8 +557,6 @@ def build_dist_matrix(response):
     Takes response from distance matrix API to add rows to the distance matrix. We will use travel time rather than
     distance.
     :param response: response from Google's distance matrix API
-    :param num_addresses: Number of addresses to set array size for columns
-    :param rows: Number of rows being included in response
     :return: row for distance matrix
     """
     distance_matrix = []
@@ -863,10 +861,11 @@ def number_icon(color, number):
     return icon
 
 
-def display_route(obj, val_date=None):
+def display_route(obj, session, val_date=None):
     """
     Menu for mapping functions
     :param obj: The object from which to gather the route (Team or Clinician only!)
+    :param session: Session for querying database
     :param val_date: The date to optimize the route for. If passed through, user is not prompted.
     :return: 0 if nothing is selected
     """
@@ -891,7 +890,7 @@ def display_route(obj, val_date=None):
 
     # If team, load list of all linked clinicians
     if isinstance(obj, classes.team.Team):
-        clins = [classes.person.Clinician.load_obj(clin_id) for clin_id in obj._clin_id]
+        clins = [classes.person.Clinician.load_obj(session, clin_id) for clin_id in obj._clin_id]
 
     # If clin, put clin into list for consistent handling
     elif isinstance(obj, classes.person.Clinician):
@@ -912,7 +911,7 @@ def display_route(obj, val_date=None):
 
         visit_list = []
         for visit_id in clin_visits:
-            visit = classes.visits.Visit.load_obj(visit_id)
+            visit = classes.visits.Visit.load_obj(session, visit_id)
             visit_list.append(visit)
         visits.append(visit_list)
 
