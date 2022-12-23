@@ -46,13 +46,13 @@ def main_menu(class_list):
 
         # TODO: Remove before deployment
         elif selection == "dev":
-            with DataManagerMixin.session_scope() as session:
+            with DataManagerMixin.class_session_scope() as session:
                 classes.team.Team.import_csv(session, filepath="./investigation/team_import.csv")
-            with DataManagerMixin.session_scope() as session:
+            with DataManagerMixin.class_session_scope() as session:
                 classes.person.Patient.import_csv(session, filepath="./investigation/pat_import.csv")
-            with DataManagerMixin.session_scope() as session:
+            with DataManagerMixin.class_session_scope() as session:
                 classes.person.Clinician.import_csv(session, filepath="./investigation/clin_import.csv")
-            with DataManagerMixin.session_scope() as session:
+            with DataManagerMixin.class_session_scope() as session:
                 classes.visits.Visit.import_csv(session, filepath="./investigation/visit_import.csv")
 
         else:
@@ -89,12 +89,12 @@ def obj_menu(class_list):
                 break
 
             if selection == "1":
-                with cls.session_scope() as session:
+                with cls.class_session_scope() as session:
                     obj_selection(cls, session)
                     continue
 
             elif selection == "2":
-                with cls.session_scope() as session:
+                with cls.class_session_scope() as session:
                     create_object_director(cls, session)
                     continue
 
@@ -199,12 +199,12 @@ def import_export_menu(cls):
             continue
 
         elif selection == "2":
-            with cls.session_scope() as session:
+            with cls.class_session_scope() as session:
                 cls.export_csv(session)
                 continue
 
         elif selection == "3":
-            with cls.session_scope() as session:
+            with cls.class_session_scope() as session:
                 cls.import_csv(session)
                 continue
 
@@ -231,18 +231,18 @@ def geo_feat():
             return 0
 
         elif selection == "1":
-            with classes.person.Clinician.session_scope() as session:
+            with classes.person.Clinician.class_session_scope() as session:
                 obj = classes.person.Clinician.get_obj(session)
                 if not obj:
                     continue
-                geolocation.optimize_route(obj)
+                obj.optimize_route()
 
         elif selection == "2":
-            with classes.team.Team.session_scope() as session:
+            with classes.team.Team.class_session_scope() as session:
                 obj = classes.team.Team.get_obj(session)
                 if not obj:
                     continue
-                geolocation.optimize_route(obj)
+                obj.optimize_route()
 
         elif selection == "3":
             # Prompt user for which type of record to load
@@ -258,18 +258,18 @@ def geo_feat():
                     return 0
 
             if selection == "1":
-                with classes.person.Clinician.session_scope() as session:
+                with classes.person.Clinician.class_session_scope() as session:
                     obj = classes.person.Clinician.get_obj(session)
                     if not obj:
                         continue
-                    geolocation.display_route(obj)
+                    obj.display_route()
 
             elif selection == "2":
-                with classes.team.Team.session_scope() as session:
+                with classes.team.Team.class_session_scope() as session:
                     obj = classes.team.Team.get_obj(session)
                     if not obj:
                         continue
-                    geolocation.display_route(obj)
+                    obj.display_route()
 
             continue
 

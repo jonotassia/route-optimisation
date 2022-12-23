@@ -14,12 +14,12 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
     # Initialise table details
     __tablename__ = "Visit"
     _id = Column(Integer, primary_key=True, unique=True)
+    _status = Column(String, nullable=True)
     _pat_id = Column(Integer, ForeignKey("Patient._id"))
     pat = relationship("Patient", back_populates="visits")
     _clin_id = Column(Integer, ForeignKey("Clinician._id"), nullable=True)
     clin = relationship("Clinician", back_populates="visits")
     _exp_date = Column(Date, nullable=True)
-    _status = Column(String, nullable=True)
     _time_earliest = Column(Time, nullable=True)
     _time_latest = Column(Time, nullable=True)
     _visit_priority = Column(String, nullable=True)
@@ -124,28 +124,23 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
         Displays an address parsed using USAddress. Loops through values in dictionary to output human-readable address.
         :return: Human-readable address
         """
-        pat = classes.person.Patient.load_obj(self.session, self.pat_id)
-        return pat.address
+        return self.pat._address
 
     @property
     def zip_code(self):
-        pat = classes.person.Patient.load_obj(self.session, self.pat_id)
-        return pat.zip_code
+        return self.pat._zip_code
 
     @property
     def building(self):
-        pat = classes.person.Patient.load_obj(self.session, self.pat_id)
-        return pat.building
+        return self.pat._building
 
     @property
     def coord(self):
-        pat = classes.person.Patient.load_obj(self.session, self.pat_id)
-        return pat.coord
+        return self.pat.coord
 
     @property
     def plus_code(self):
-        pat = classes.person.Patient.load_obj(self.session, self.pat_id)
-        return pat.plus_code
+        return self.pat._plus_code
 
     @property
     def exp_date(self):
@@ -157,16 +152,17 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
         if not value:
             self._exp_date = None
 
-        date = validate.valid_date(value)
-
-        if isinstance(date, Exception):
-            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
-
-        elif date.date() < date.today().date():
-            raise ValueError("Date cannot be before today.\n")
-
         else:
-            self._exp_date = date
+            date = validate.valid_date(value)
+
+            if isinstance(date, Exception):
+                raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+
+            elif date.date() < date.today().date():
+                raise ValueError("Date cannot be before today.\n")
+
+            else:
+                self._exp_date = date
 
     @property
     def time_earliest(self):
@@ -175,13 +171,17 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
     @time_earliest.setter
     def time_earliest(self, value):
         """Checks values of time window start before assigning"""
-        time = validate.valid_time(value)
-
-        if not isinstance(time, Exception):
-            self._time_earliest = time
+        if not value:
+            self._time_earliest = None
 
         else:
-            raise ValueError("Please enter a valid time in the format HHMM.\n")
+            time = validate.valid_time(value)
+
+            if not isinstance(time, Exception):
+                self._time_earliest = time
+
+            else:
+                raise ValueError("Please enter a valid time in the format HHMM.\n")
 
     @property
     def time_latest(self):
@@ -191,21 +191,25 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
     def time_latest(self, value):
         """Checks values of time window end before assigning"""
         # TODO: Figure out how to handle the midnight instance in time window and scheduling (try using instants)
-        time = validate.valid_time(value)
+        if not value:
+            self._time_latest = None
 
-        if not isinstance(time, Exception):
-            # If there is no start time window (unlikely), allow end time window to be set.
-            if not self.time_earliest:
-                self._time_latest = time
-
-            # If there is a start time window and it is before the start time, allow it to be set.
-            if self.time_earliest and time > self._time_earliest:
-                self._time_latest = time
-
-            else:
-                raise ValueError("End time cannot be before start time.")
         else:
-            raise ValueError("Please enter a valid time in the format HHMM.\n")
+            time = validate.valid_time(value)
+
+            if not isinstance(time, Exception):
+                # If there is no start time window (unlikely), allow end time window to be set.
+                if not self.time_earliest:
+                    self._time_latest = time
+
+                # If there is a start time window and it is before the start time, allow it to be set.
+                if self.time_earliest and time > self._time_earliest:
+                    self._time_latest = time
+
+                else:
+                    raise ValueError("End time cannot be before start time.")
+            else:
+                raise ValueError("Please enter a valid time in the format HHMM.\n")
 
     @property
     def visit_complexity(self):
@@ -344,33 +348,27 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
 
             # Update request date and time
             elif selection == "1":
-                with self.session_scope() as session:
-                    self.session = session
+                with self.session_scope():
                     self.update_date_time()
 
             elif selection == "2":
-                with self.session_scope() as session:
-                    self.session = session
+                with self.session_scope():
                     self.manual_assign_visit()
 
             elif selection == "3":
-                with self.session_scope() as session:
-                    self.session = session
+                with self.session_scope():
                     self.modify_skills()
 
             elif selection == "4":
-                with self.session_scope() as session:
-                    self.session = session
+                with self.session_scope():
                     self.modify_discipline()
 
             elif selection == "5":
-                with self.session_scope() as session:
-                    self.session = session
+                with self.session_scope():
                     self.modify_priority_complexity()
 
             elif selection == "6":
-                with self.session_scope() as session:
-                    self.session = session
+                with self.session_scope():
                     self.inactivate_self()
                 return 0
 
@@ -399,7 +397,7 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
 
         # Update all attributes from above. Quit if user quits during any attribute
         if not validate.get_info(self, attr_list):
-            self.refresh_self(self.Session.object_session())
+            self.refresh_self(self.session)
             return 0
 
         # Save old date for searching and updating instances_by_date index
@@ -412,11 +410,11 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
 
         # If user does not confirm info, changes will be reverted.
         if not validate.confirm_info(self, detail_dict):
-            self.refresh_self(self.Session.object_session())
+            self.refresh_self(self.session)
             return 0
 
         # Save and update instance lists
-        self.write_obj(self.Session.object_session())
+        self.write_obj(self.session)
 
         return 1
 
@@ -599,7 +597,7 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
 
         # Update all attributes from above. Quit if user quits during any attribute
         if not validate.get_info(self, attr_list):
-            self.refresh_self()
+            self.refresh_self(self.session)
             return 0
 
         detail_dict = {
@@ -609,12 +607,11 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
 
         # If user does not confirm info, changes will be reverted.
         if not validate.confirm_info(self, detail_dict):
-            self.refresh_self()
+            self.refresh_self(self.session)
             return 0
 
         # Save and update instance lists
         self.write_obj(self.session)
-
         return 1
 
     @classmethod
@@ -662,9 +659,9 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
             return 0
 
         detail_dict = {
-            "Patient": obj.patient_name,
+            "Patient": pat.name,
             "Visit ID": obj.id,
-            "Visit Address": obj.address,
+            "Visit Address": pat.address,
             "Expected Date": obj.exp_date,
             "Time Window": f"{obj.time_earliest} - {obj.time_latest}"
         }
@@ -673,6 +670,8 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
         if not validate.confirm_info(obj, detail_dict):
             print("Record not created.")
             return 0
+
+        obj.write_obj(session)
 
         return 1
 
@@ -726,7 +725,7 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
     @classmethod
     def evaluate_requests(cls):
         """Evaluates all Visits and marks them as no shows if they are past their expected date"""
-        with cls.session_scope() as session:
+        with cls.class_session_scope() as session:
             for visit in session.query(Visit).distinct().all():
                 # Evaluate date against current date and mark as expired if due before current date
                 if datetime.strptime(visit.exp_date, '%d-%m-%Y').date() < date.today():

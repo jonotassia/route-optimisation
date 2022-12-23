@@ -1,6 +1,6 @@
 import pathlib
 import validate
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import sessionmaker, declarative_base, reconstructor
 from sqlalchemy import create_engine
 from contextlib import contextmanager
 import pandas as pd
@@ -29,9 +29,16 @@ class DataManagerMixin:
         # Init only used when importing. Otherwise, session is managed more granularly
         self.session = self.Session()
 
+    @reconstructor
+    def init_on_load(self):
+        """
+        Ensures the self.session object is assigned when the object is reconstructed for consistent handling
+        """
+        self.session = self.Session.object_session(self)
+
     @classmethod
     @contextmanager
-    def session_scope(cls):
+    def class_session_scope(cls):
         """
         Provides a transactional scope around a series of operations.
         :return: None
@@ -46,6 +53,21 @@ class DataManagerMixin:
             raise
         finally:
             session.close()
+
+    @contextmanager
+    def session_scope(self):
+        """
+        Provides a transactional scope around a series of operations.
+        The local session scope is not closed using this context manager. It simply manages the transaction.
+        :return: None
+        """
+        try:
+            yield self.session
+            self.session.commit()
+        except:
+            self.session.rollback()
+            self.session.refresh(self)
+            raise
 
     @classmethod
     def create_tables(cls):
@@ -72,8 +94,8 @@ class DataManagerMixin:
     def get_obj(cls, session, inc_inac=0):
         """
         Class method to initialise a class instance from file. Returns the file as an object
-        :param session: Session for querying database
         :param cls: Class of object to load (directs to the relevant table)
+        :param session: Session for querying database
         :param inc_inac: Flags whether inactive records should be included
         """
         while True:
@@ -121,12 +143,12 @@ class DataManagerMixin:
 
         return obj
 
-    def refresh_self(self):
+    def refresh_self(self, session):
         """Refreshes an existing object from file in the in case users need to backout changes."""
         # TODO: Remove once context manager implemented
         print("Reverting changes...")
-        self.Session.object_session(self).rollback()
-        self.Session.object_session(self).refresh(self)
+        session.rollback()
+        session.refresh(self)
 
 
     @classmethod

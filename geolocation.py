@@ -21,7 +21,7 @@ def optimize_route(obj):
     Optimizes a single or team of clinicians' schedule for the day based on distance traveled for all assigned visits on
     that day. This uses a combination of Google's distance matrix API and Google OR tools.
     :param obj: Clinician or team to optimize
-    :return: List of tuples of appointment coordinates for optimal travel time
+    :return: List of tuples of appointment addresses for optimal travel time
     """
     # Get date to optimise
     while True:
@@ -83,6 +83,9 @@ def optimize_route(obj):
     # Generate distance matrix
     dist_matrix = create_dist_matrix(data_dict["plus_code_list"])
 
+    if not dist_matrix.any():
+        return 0
+
     # Calculate optimal route - this returns a list of lists per clinician, so can safely assume we want index 0
     manager, routing, solution = route_optimizer(dist_matrix, len(clins), data_dict["start_list"],
                                                  data_dict["end_list"], data_dict["time_windows"],
@@ -103,8 +106,10 @@ def optimize_route(obj):
             dropped_nodes[node] = "Skill/Discipline Mismatch" if routing.GetDisjunctionMaxCardinality(
                 node) <= 1 else "Time Window Mismatch"
 
-    # Create optimal route order and assign to each clinician. Pass clin as list for proper handling
-    return_solution(clins, visits, len(data_dict["start_list"]), dropped_nodes, manager, routing, solution)
+    # Open session to commit changes before prompting route display
+    with obj.session_scope():
+        # Create optimal route order and assign to each clinician. Pass clin as list for proper handling.
+        return_solution(clins, visits, len(data_dict["start_list"]), dropped_nodes, manager, routing, solution)
 
     # Prompt user for which type of map to load
     confirm = validate.yes_or_no("View route on map?: ")
@@ -132,8 +137,8 @@ def generate_data(visits, clins):
     visit_plus_codes = [visit.plus_code for visit in visits]
 
     # Load all clinicians in team and populate list of start and end plus codes
-    start_list = [clin.start_plus_code for clin in clins]
-    end_list = [clin.end_plus_code for clin in clins]
+    start_list = [clin._start_plus_code for clin in clins]
+    end_list = [clin._end_plus_code for clin in clins]
 
     # Combine clinician and patient addresses together
     plus_code_list = start_list + visit_plus_codes + end_list
@@ -609,7 +614,8 @@ def return_solution(clins, visits, n_start_list, dropped_nodes, manager, routing
             # Assign clinician to visit (which assigns the visit to the clinician as well) and save
             for visit in clin_visits:
                 visit.clin_id = clin.id
-                visit.write_self()
+                visit.sched_status = "assigned"
+                visit.write_obj(visit.session)
 
         return None
 
@@ -655,7 +661,8 @@ def return_solution(clins, visits, n_start_list, dropped_nodes, manager, routing
             # Assign clinician to visit (which assigns the visit to the clinician as well) and save
             for visit in clin_visits:
                 visit.clin_id = clin.id
-                visit.write_self()
+                visit.sched_status = "assigned"
+                visit.write_obj(visit.session)
 
             # Convert rt_details to Pandas table and display
             rt_detail = pd.DataFrame.from_dict(rt_detail, orient="index")
@@ -820,8 +827,14 @@ def coord_average(coord_list):
     :return: Tuple of average longitude and latitude
     """
     # Split latitude and longitude
-    lat_list = np.array([coord[0] for coord_group in coord_list for coord in coord_group])
-    long_list = np.array([coord[1] for coord_group in coord_list for coord in coord_group])
+    lats = [coord[0] for coord_group in coord_list for coord in coord_group]
+    lngs = [coord[1] for coord_group in coord_list for coord in coord_group]
+
+    if not lats or not lngs:
+        return 0
+
+    lat_list = np.array(lats)
+    long_list = np.array(lngs)
 
     # Average latitude and longitude
     mean_lat = lat_list.mean()
@@ -861,7 +874,7 @@ def display_route(obj, val_date=None):
     # Prompt user for date for optimization and validate format
     if not val_date:
         while True:
-            inp_date = validate.qu_input("Please select a date to optimize the route: ")
+            inp_date = validate.qu_input("Please select a date to view the route: ")
 
             if not inp_date:
                 return 0
@@ -923,6 +936,10 @@ def map_markers_only(clins, visits):
     visit_locations = [[visit.coord for visit in visit_group] for visit_group in visits]
     center_coord = coord_average(visit_locations)
 
+    if not center_coord:
+        print("No visits assigned on this date. Returning...")
+        return 0
+
     # Initialize map and set boundaries.
     route_map = folium.Map(location=center_coord)
     route_map.fit_bounds(visit_locations)
@@ -932,6 +949,9 @@ def map_markers_only(clins, visits):
 
     # Loop through each coord group by clinician and create a new marker and tooltip, assorted by color for each clinician
     for clin_index, clin in enumerate(clins):
+        if not clin.visits:
+            continue
+
         # Add feature group for each clinician so they can be turned on or off
         feature_group = folium.FeatureGroup(name=f"{clin.name}").add_to(route_map)
 
@@ -1025,6 +1045,12 @@ def map_markers_and_polyline(clins, visits):
     """
     # Load coordinates for each visit and start and end coords for each clinician
     visit_locations = [[visit.coord for visit in visit_group] for visit_group in visits]
+    # Calculate central point to initialize map
+    center_coord = coord_average(visit_locations)
+
+    if not center_coord:
+        print("No visits assigned on this date. Returning...")
+        return 0
 
     # Get coordinates for bounding box
     start_locations = [clin.start_coord for clin in clins]
@@ -1043,8 +1069,7 @@ def map_markers_and_polyline(clins, visits):
     mode = 'drive'  # "all_private", "all", "bike", "drive", "drive_service", "walk"
     graph = ox.graph_from_bbox(north_bbox_lim, south_bbox_lim, east_bbox_lim, west_bbox_lim, network_type=mode)
 
-    # Calculate central point to initialize map
-    center_coord = coord_average(visit_locations)
+
 
     # Initialize map and set boundaries.
     route_map = folium.Map(location=center_coord)
@@ -1058,6 +1083,9 @@ def map_markers_and_polyline(clins, visits):
 
     for clin_index, clin in enumerate(clins):
         # Create subgroups for each clinician in group
+        if not clin.visits:
+            continue
+
         sub_marker_group = plugins.FeatureGroupSubGroup(marker_group,
                                                                name=f"Markers - {clins[clin_index].name}").add_to(
             route_map)

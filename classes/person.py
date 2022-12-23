@@ -52,22 +52,29 @@ class Human(DataManagerMixin):
 
     @name.setter
     def name(self, value):
-        name = validate.valid_name(value)
-
-        if not isinstance(name, Exception):
-            self._last_name = name[0]
-            self._first_name = name[1]
-
-            try:
-                self._middle_name = name[2]
-
-            except TypeError:
-                self._middle_name = None
-
-            self._name = f"{self._last_name}, {self._first_name} {self._middle_name}"
+        if not value:
+            self._name = None
+            self._last_name = None
+            self._first_name = None
+            self._middle_name = None
 
         else:
-            raise ValueError("Please provide a valid name in the format LAST, FIRST MIDDLE")
+            name = validate.valid_name(value)
+
+            if not isinstance(name, Exception):
+                self._last_name = name[0]
+                self._first_name = name[1]
+
+                try:
+                    self._middle_name = name[2]
+
+                except TypeError:
+                    self._middle_name = None
+
+                self._name = f"{self._last_name}, {self._first_name} {self._middle_name}"
+
+            else:
+                raise ValueError("Please provide a valid name in the format LAST, FIRST MIDDLE")
 
     @property
     def dob(self):
@@ -76,13 +83,17 @@ class Human(DataManagerMixin):
     @dob.setter
     def dob(self, value):
         """Checks values of date of birth before assigning"""
-        dob = validate.valid_date(value)
-
-        if not isinstance(dob, Exception):
-            self._dob = dob
+        if not value:
+            self._dob = None
 
         else:
-            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+            dob = validate.valid_date(value)
+
+            if not isinstance(dob, Exception):
+                self._dob = dob
+
+            else:
+                raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
 
     @property
     def sex(self):
@@ -91,13 +102,17 @@ class Human(DataManagerMixin):
     @sex.setter
     def sex(self, value):
         """Checks values of sex before assigning"""
-        sex = validate.valid_cat_list(value, self._c_sex_options)
-
-        if not isinstance(sex, Exception):
-            self._sex = sex
+        if not value:
+            self._sex = None
 
         else:
-            raise ValueError(f"Invalid selection. Value not in {self._c_sex_options}")
+            sex = validate.valid_cat_list(value, self._c_sex_options)
+
+            if not isinstance(sex, Exception):
+                self._sex = sex
+
+            else:
+                raise ValueError(f"Invalid selection. Value not in {self._c_sex_options}")
 
     @property
     def address(self):
@@ -105,34 +120,37 @@ class Human(DataManagerMixin):
         Displays an address parsed using USAddress. Loops through values in dictionary to output human-readable address.
         :return: Human-readable address
         """
-        return self._address["address"]
+        return self._address
 
     @address.setter
     def address(self, value):
         """Checks values of address before assigning"""
-        address = validate.valid_address(value)
-
-        if not isinstance(address, Exception):
-            self._address = address
+        if not value:
+            self._address = None
 
         else:
-            raise ValueError("Please enter a complete and valid address.\n")
+            address = validate.valid_address(value)
 
-    @property
-    def zip_code(self):
-        return self._address["zip_code"]
+            if not isinstance(address, Exception):
+                self._address = address["address"]
+                self._lat = address["coord"][0]
+                self._lng = address["coord"][1]
+                self._zip_code = address["zip_code"]
+                try:
+                    self._building = address["building"]
+                except KeyError:
+                    self._building = None
+                try:
+                    self._plus_code = address["plus_code"]
+                except KeyError:
+                    self._plus_code = self._address
 
-    @property
-    def building(self):
-        return self._address["building"]
+            else:
+                raise ValueError("Please enter a complete and valid address.\n")
 
     @property
     def coord(self):
-        return self._address["coord"]
-
-    @property
-    def plus_code(self):
-        return self._address["plus_code"]
+        return self._lat, self._lng
 
     @classmethod
     def create_self(cls, session):
@@ -264,8 +282,6 @@ class Human(DataManagerMixin):
             else:
                 print("Invalid selection")
 
-
-
     def assign_team(self):
         """
         Assigns the clinician or patient to a team so that they can be considered in that team's route calculation
@@ -310,7 +326,12 @@ class Patient(Human, DataManagerMixin.Base):
     _status = Column(String, nullable=True)
     _dob = Column(Date)
     _sex = Column(String)
-    _address = Column(MutableDict.as_mutable(PickleType), nullable=True)
+    _address = Column(String, nullable=True)
+    _zip_code = Column(String, nullable=True)
+    _building = Column(String, nullable=True)
+    _lat = Column(Integer, nullable=True)
+    _lng = Column(Integer, nullable=True)
+    _plus_code = Column(String, nullable=True)
     _team_id = Column(Integer, ForeignKey("Team._id"), nullable=True)
     team = relationship("Team", back_populates="pats")
     visits = relationship("Visit", back_populates="pat")
@@ -350,13 +371,17 @@ class Patient(Human, DataManagerMixin.Base):
     @inactive_reason.setter
     def inactive_reason(self, value):
         """Checks values of inactive reason before assigning"""
-        reason = validate.valid_cat_list(value, self._c_inactive_reason)
-
-        if reason:
-            self._inactive_reason = reason
+        if not value:
+            self._inactive_reason = None
 
         else:
-            raise ValueError(f"Invalid selection. Value not in {self._c_inactive_reason}")
+            reason = validate.valid_cat_list(value, self._c_inactive_reason)
+
+            if reason:
+                self._inactive_reason = reason
+
+            else:
+                raise ValueError(f"Invalid selection. Value not in {self._c_inactive_reason}")
 
     @property
     def death_date(self):
@@ -365,13 +390,17 @@ class Patient(Human, DataManagerMixin.Base):
     @death_date.setter
     def death_date(self, value):
         """Checks values of date of death before assigning"""
-        date = validate.valid_date(value)
-
-        if date:
-            self._death_date = date
+        if not value:
+            self._death_date = None
 
         else:
-            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
+            date = validate.valid_date(value)
+
+            if date:
+                self._death_date = date
+
+            else:
+                raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
 
     @property
     def death_time(self):
@@ -380,13 +409,17 @@ class Patient(Human, DataManagerMixin.Base):
     @death_time.setter
     def death_time(self, value):
         """Checks values of date of time before assigning"""
-        time = validate.valid_time(value)
-
-        if time:
-            self._death_time = time
+        if not value:
+            self._death_time = None
 
         else:
-            raise ValueError("Please enter a valid time in the format HHMM.\n")
+            time = validate.valid_time(value)
+
+            if time:
+                self._death_time = time
+
+            else:
+                raise ValueError("Please enter a valid time in the format HHMM.\n")
 
     @property
     def team_id(self):
@@ -397,11 +430,15 @@ class Patient(Human, DataManagerMixin.Base):
         """
         ID of linked team.
         """
-        if classes.team.Team.load_obj(self.session, value):
-            self._team_id = value
+        if not value:
+            self._team_id = None
 
         else:
-            raise ValueError("This is not a valid team ID.\n")
+            if classes.team.Team.load_obj(self.session, value):
+                self._team_id = value
+
+            else:
+                raise ValueError("This is not a valid team ID.\n")
 
     def update_self(self):
         """
@@ -426,38 +463,32 @@ class Patient(Human, DataManagerMixin.Base):
                 return 0
 
             elif selection == "1":
-                with self.session_scope() as session:
-                    self.session = session
+                with self.session_scope():
                     self.modify_visits()
 
             # Generate a new visit
             elif selection == "2":
-                with self.session_scope() as session:
-                    self.session = session
-                    classes.visits.Visit.create_self(session, pat_id=self.id)
+                with self.session_scope():
+                    classes.visits.Visit.create_self(self.session, pat_id=self.id)
 
             # Update address
             elif selection == "3":
-                with self.session_scope() as session:
-                    self.session = session
+                with self.session_scope():
                     self.update_address()
 
             # Update preferences, including skill requirements, gender, and times
             elif selection == "4":
-                with self.session_scope() as session:
-                    self.session = session
+                with self.session_scope():
                     self.update_skill_pref()
 
             # Assign responsible team to patient
             elif selection == "5":
-                with self.session_scope() as session:
-                    self.session = session
+                with self.session_scope():
                     self.assign_team()
 
             # Inactivate patient
             elif selection == "6":
-                with self.session_scope() as session:
-                    self.session = session
+                with self.session_scope():
                     self.inactivate_self()
                 return 0
 
@@ -597,9 +628,24 @@ class Clinician(Human, DataManagerMixin.Base):
     _status = Column(String, nullable=True)
     _dob = Column(Date)
     _sex = Column(String)
-    _address = Column(MutableDict.as_mutable(PickleType), nullable=True)
-    _start_address = Column(MutableDict.as_mutable(PickleType))
-    _end_address = Column(MutableDict.as_mutable(PickleType))
+    _address = Column(String, nullable=True)
+    _zip_code = Column(String, nullable=True)
+    _building = Column(String, nullable=True)
+    _lat = Column(Integer, nullable=True)
+    _lng = Column(Integer, nullable=True)
+    _plus_code = Column(String, nullable=True)
+    _start_address = Column(String, nullable=True)
+    _start_zip_code = Column(String, nullable=True)
+    _start_building = Column(String, nullable=True)
+    _start_lat = Column(Integer, nullable=True)
+    _start_lng = Column(Integer, nullable=True)
+    _start_plus_code = Column(String, nullable=True)
+    _end_address = Column(String, nullable=True)
+    _end_zip_code = Column(String, nullable=True)
+    _end_building = Column(String, nullable=True)
+    _end_lat = Column(Integer, nullable=True)
+    _end_lng = Column(Integer, nullable=True)
+    _end_plus_code = Column(String, nullable=True)
     _start_time = Column(Time)
     _end_time = Column(Time)
     _team_id = Column(Integer, ForeignKey("Team._id"), nullable=True)
@@ -647,69 +693,81 @@ class Clinician(Human, DataManagerMixin.Base):
         Displays an address parsed using USAddress. Loops through values in dictionary to output human-readable address.
         :return: Human-readable address
         """
-        return self._start_address["address"] if self._start_address else self.address["address"]
+        try:
+            return self._start_address
+        except AttributeError:
+            return self.address
 
     @start_address.setter
     def start_address(self, value):
         """Checks values of address before assigning"""
-        address = validate.valid_address(value)
-
-        if not isinstance(address, Exception):
-            self._start_address = address
+        if not value:
+            self._start_address = None
 
         else:
-            raise ValueError("Please enter a complete and valid address.\n")
+            address = validate.valid_address(value)
 
-    @property
-    def start_zip_code(self):
-        return self._start_address["zip_code"] if self._start_address else self.address["zip_code"]
+            if not isinstance(address, Exception):
+                self._start_address = address["address"]
+                self._start_lat = address["coord"][0]
+                self._start_lng = address["coord"][1]
+                self._start_zip_code = address["zip_code"]
+                try:
+                    self._start_building = address["building"]
+                except KeyError:
+                    self._start_building = None
+                try:
+                    self._start_plus_code = address["plus_code"]
+                except KeyError:
+                    self._start_plus_code = self._start_address
 
-    @property
-    def start_building(self):
-        return self._start_address["building"] if self._start_address else self.address["building"]
+            else:
+                raise ValueError("Please enter a complete and valid address.\n")
 
     @property
     def start_coord(self):
-        return self._start_address["coord"] if self._start_address else self.address["coord"]
-
-    @property
-    def start_plus_code(self):
-        return self._start_address["plus_code"] if self._start_address else self.address["plus_code"]
+        return self._start_lat, self._start_lng
 
     @property
     def end_address(self):
         """
-        Displays an address parsed using USAddress. Loops through values in dictionary to output human-readable address.
+        Displays an address parsed using USAddress.
         :return: Human-readable address
         """
-        return self._end_address["address"] if self._end_address else self.address["address"]
+        try:
+            return self._end_address
+        except AttributeError:
+            return self.address
 
     @end_address.setter
     def end_address(self, value):
         """Checks values of address before assigning"""
-        address = validate.valid_address(value)
-
-        if not isinstance(address, Exception):
-            self._end_address = address
+        if not value:
+            self._end_address = None
 
         else:
-            raise ValueError("Please enter a complete and valid address.\n")
+            address = validate.valid_address(value)
 
-    @property
-    def end_zip_code(self):
-        return self._end_address["zip_code"] if self._end_address else self.address["zip_code"]
+            if not isinstance(address, Exception):
+                self._end_address = address["address"]
+                self._end_lat = address["coord"][0]
+                self._end_lng = address["coord"][1]
+                self._end_zip_code = address["zip_code"]
+                try:
+                    self._end_building = address["building"]
+                except KeyError:
+                    self._end_building = None
+                try:
+                    self._end_plus_code = address["plus_code"]
+                except KeyError:
+                    self._end_plus_code = self._end_address
 
-    @property
-    def end_building(self):
-        return self._end_address["building"] if self._end_address else self.address["building"]
+            else:
+                raise ValueError("Please enter a complete and valid address.\n")
 
     @property
     def end_coord(self):
-        return self._end_address["coord"] if self._end_address else self.address["coord"]
-
-    @property
-    def end_plus_code(self):
-        return self._end_address["plus_code"] if self._end_address else self.address["plus_code"]
+        return self._end_lat, self._end_lng
 
     @property
     def start_time(self):
@@ -718,13 +776,17 @@ class Clinician(Human, DataManagerMixin.Base):
     @start_time.setter
     def start_time(self, value):
         """Checks values of start time before assigning"""
-        time = validate.valid_time(value)
-
-        if time:
-            self._start_time = time
+        if not value:
+            self._start_time = None
 
         else:
-            raise ValueError("Please enter a valid time in the format HHMM.\n")
+            time = validate.valid_time(value)
+
+            if time:
+                self._start_time = time
+
+            else:
+                raise ValueError("Please enter a valid time in the format HHMM.\n")
 
     @property
     def end_time(self):
@@ -733,13 +795,17 @@ class Clinician(Human, DataManagerMixin.Base):
     @end_time.setter
     def end_time(self, value):
         """Checks values of end time before assigning"""
-        time = validate.valid_time(value)
-
-        if time:
-            self._end_time = time
+        if not value:
+            self._end_time = None
 
         else:
-            raise ValueError("Please enter a valid time in the format HHMM.\n")
+            time = validate.valid_time(value)
+
+            if time:
+                self._end_time = time
+
+            else:
+                raise ValueError("Please enter a valid time in the format HHMM.\n")
 
     @property
     def team_id(self):
@@ -750,11 +816,15 @@ class Clinician(Human, DataManagerMixin.Base):
         """
         ID of linked team.
         """
-        if classes.team.Team.load_obj(self.session, value):
-            self._team_id = value
+        if not value:
+            self._team_id = None
 
         else:
-            raise ValueError("This is not a valid team ID.\n")
+            if classes.team.Team.load_obj(self.session, value):
+                self._team_id = value
+
+            else:
+                raise ValueError("This is not a valid team ID.\n")
 
     @property
     def team_name(self):
@@ -770,9 +840,8 @@ class Clinician(Human, DataManagerMixin.Base):
         Maximum weight of visits a clinician can undertake. This is based on the assumption that in an 8 hour day,
         a clinician can complete a maximum of 5 complex visits (weight 3). Therefore, an 8 hour day has capacity 15.
         """
-        shift_length = (
-                                   self._end_time.hour - self._start_time.hour) * 60 + self._end_time.minute - self._start_time.minute
-        return int(shift_length / 32)
+        shift_lng = (self._end_time.hour - self._start_time.hour) * 60 + self._end_time.minute - self._start_time.minute
+        return int(shift_lng / 32)
 
     @property
     def discipline(self):
@@ -830,13 +899,17 @@ class Clinician(Human, DataManagerMixin.Base):
     @inactive_reason.setter
     def inactive_reason(self, value):
         """Checks values of inactive reason before assigning"""
-        reason = validate.valid_cat_list(value, self._c_inactive_reason)
-
-        if reason:
-            self._inactive_reason = reason
+        if not value:
+            self._inactive_reason = None
 
         else:
-            raise ValueError(f"Invalid selection. Value not in {self._c_inactive_reason}")
+            reason = validate.valid_cat_list(value, self._c_inactive_reason)
+
+            if reason:
+                self._inactive_reason = reason
+
+            else:
+                raise ValueError(f"Invalid selection. Value not in {self._c_inactive_reason}")
 
     def update_self(self):
         """
@@ -864,38 +937,32 @@ class Clinician(Human, DataManagerMixin.Base):
 
             # View/modify scheduled visits
             elif selection == "1":
-                with self.session_scope() as session:
-                    self.session = session
+                with self.session_scope():
                     self.modify_visits()
 
             # Update start/end time and address
             elif selection == "2":
-                with self.session_scope() as session:
-                    self.session = session
+                with self.session_scope():
                     self.update_start_end()
 
             # Update address
             elif selection == "3":
-                with self.session_scope() as session:
-                    self.session = session
+                with self.session_scope():
                     self.update_address()
 
             # Modify discipline
             elif selection == "4":
-                with self.session_scope() as session:
-                    self.session = session
+                with self.session_scope():
                     self.modify_discipline()
 
             # Modify clinical skills
             elif selection == "5":
-                with self.session_scope() as session:
-                    self.session = session
+                with self.session_scope():
                     self.modify_skills()
 
             # Assign team
             elif selection == "6":
-                with self.session_scope() as session:
-                    self.session = session
+                with self.session_scope():
                     self.assign_team()
 
             # Optimize route
@@ -908,8 +975,7 @@ class Clinician(Human, DataManagerMixin.Base):
 
             # Inactivate record
             elif selection == "9":
-                with self.session_scope() as session:
-                    self.session = session
+                with self.session_scope():
                     self.inactivate_self()
                     return 0
 
@@ -1070,8 +1136,13 @@ class Clinician(Human, DataManagerMixin.Base):
         Assigns the clinician or patient to a team so that they can be considered in that team's route calculation
         """
         # Allow user to select team either by name or id, then load to an object
-        print(f"Select a team to add to this {self.__class__.__name__}. "
-              f"Current: {self.team._name if self.team._name else 'None'}")
+        try:
+            print(f"Select a team to add to this {self.__class__.__name__}. "
+                  f"Current: {self.team._name}")
+
+        except AttributeError:
+            print(f"Select a team to add to this {self.__class__.__name__}. "
+                  f"Current: None")
 
         team = classes.team.Team.get_obj(self.session)
 
@@ -1083,8 +1154,8 @@ class Clinician(Human, DataManagerMixin.Base):
         self.team_id = team.id
 
         detail_dict = {
-            "Team ID": self.team.id,
-            "Team Name": self.team._name
+            "Team ID": team.id,
+            "Team Name": team._name
         }
 
         # If user does not confirm info, changes will be reverted.

@@ -2,7 +2,7 @@
 import itertools
 from sqlalchemy import Column, String, Integer, PickleType
 from sqlalchemy.orm import relationship
-from sqlalchemy.ext.mutable import MutableDict
+from sqlalchemy.ext.mutable import MutableList
 from data_manager import DataManagerMixin
 import geolocation
 import validate
@@ -17,7 +17,12 @@ class Team(DataManagerMixin, DataManagerMixin.Base):
     pats = relationship("Patient", back_populates="team")
     clins = relationship("Clinician", back_populates="team")
     _status = Column(String, nullable=True)
-    _address = Column(MutableDict.as_mutable(PickleType), nullable=True)
+    _address = Column(String, nullable=True)
+    _zip_code = Column(String, nullable=True)
+    _building = Column(String, nullable=True)
+    _lat = Column(Integer, nullable=True)
+    _lng = Column(Integer, nullable=True)
+    _plus_code = Column(String, nullable=True)
 
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
 
@@ -71,34 +76,37 @@ class Team(DataManagerMixin, DataManagerMixin.Base):
         Displays an address parsed using USAddress. Loops through values in dictionary to output human-readable address.
         :return: Human-readable address
         """
-        return self._address["address"]
+        return self._address
 
     @address.setter
     def address(self, value):
         """Checks values of address before assigning"""
-        address = validate.valid_address(value)
-
-        if not isinstance(address, Exception):
-            self._address = address
+        if not value:
+            self._address = None
 
         else:
-            raise ValueError("Please enter a complete and valid address.\n")
+            address = validate.valid_address(value)
 
-    @property
-    def zip_code(self):
-        return self._address["zip_code"]
+            if not isinstance(address, Exception):
+                self._address = address["address"]
+                self._lat = address["coord"][0]
+                self._lng = address["coord"][1]
+                self._zip_code = address["zip_code"]
+                try:
+                    self._building = address["building"]
+                except KeyError:
+                    self._building = None
+                try:
+                    self._plus_code = address["plus_code"]
+                except KeyError:
+                    self._plus_code = self._address
 
-    @property
-    def building(self):
-        return self._address["building"]
+            else:
+                raise ValueError("Please enter a complete and valid address.\n")
 
     @property
     def coord(self):
-        return self._address["coord"]
-
-    @property
-    def plus_code(self):
-        return self._address["plus_code"]
+        return self._lat, self._lng
 
     def update_self(self):
         """
@@ -122,14 +130,12 @@ class Team(DataManagerMixin, DataManagerMixin.Base):
 
             # Update request date and time
             elif selection == "1":
-                with self.session_scope() as session:
-                    self.session = session
+                with self.session_scope():
                     self.update_name()
 
             # Update request address
             elif selection == "2":
-                with self.session_scope() as session:
-                    self.session = session
+                with self.session_scope():
                     self.update_address()
 
             # Optimize route
@@ -142,8 +148,7 @@ class Team(DataManagerMixin, DataManagerMixin.Base):
 
             # Inactivate record
             elif selection == "5":
-                with self.session_scope() as session:
-                    self.session = session
+                with self.session_scope():
                     self.inactivate_self()
                 return 0
 
@@ -249,7 +254,7 @@ class Team(DataManagerMixin, DataManagerMixin.Base):
             print("Record not created.")
             return 0
 
-        obj.write_self(session)
+        obj.write_obj(session)
         return obj
 
     def inactivate_self(self):
@@ -305,15 +310,17 @@ class Team(DataManagerMixin, DataManagerMixin.Base):
 
         return 1
 
-    def optimize_route(self, session):
+    def optimize_route(self):
         """
         Calculates the estimated route for all clinicians on the team.
         """
-        geolocation.optimize_route(self)
+        with self.session_scope():
+            geolocation.optimize_route(self)
 
-    def display_route(self, session):
+    def display_route(self):
         """
         Displays the route for all clinicians on the team.
         """
-        geolocation.display_route(self)
+        with self.session_scope():
+            geolocation.display_route(self)
     # TODO: Add a class method to reactivate a record
