@@ -265,7 +265,7 @@ def get_info(obj, attr_dict_list: list):
                     else:
                         print(f"Value already in list.")
 
-                    if validate.yes_or_no("Add another value? "):
+                    if yes_or_no("Add another value? "):
                         continue
 
             except KeyError:
@@ -306,59 +306,60 @@ def confirm_info(obj, detail_dict):
         return 1
 
 
-def validate_obj_by_name(cls, name, inc_inac=0):
+def validate_obj_by_name(cls, name, session, inc_inac=0):
     """
     Uses levenshtein distance to determine a ratio of distance.
     If a perfect match is found, it will return the id of the object.
     If it is not a perfect match, adds to the match_list and displays to user to select the correct record.
     :param cls: Class of object being searched.
     :param name: Name that is being searched.
+    :param session: Session for querying database
     :param inc_inac: Flags the search to include inactive records.
     :return: Object ID
     """
     navigation.clear()
     match_list = []
 
-    for dict_id, val in cls._tracked_instances.items():
+    for obj in session.query(cls).distinct().all():
         # If flag set for hiding inactive and record is inactive, ignore
-        if not inc_inac and not val["status"]:
+        if not inc_inac and not obj.status:
             continue
 
         # Create name strings in both formats for matching from the list in tracked instances
         if issubclass(cls, classes.person.Human):
-            last_first_str = f"{val['name'][0]}, {val['name'][1]} {val['name'][2]}"
-            first_last_str = f"{val['name'][1]} {val['name'][2]} {val['name'][0]}"
+            last_first_str = f"{obj._name[0]}, {obj._name[1]} {obj._name[2]}"
+            first_last_str = f"{obj._name[1]} {obj._name[2]} {obj._name[0]}"
 
             # Measure similarity by levenshtein distance using Last, First M notation.
             lev_last_first = levratio(last_first_str, name)
 
             # If perfect match, return matches ID
             if lev_last_first == 1:
-                return dict_id
+                return obj.id
 
             # Otherwise, add to the match list if it
             elif lev_last_first > 0.6:
                 # Append ID to match list for user validation
-                match_list.append([dict_id, val['name'], val['dob'], val['sex']])
+                match_list.append(obj)
 
             # Measure similarity by levenshtein distance using First M Last notation.
             lev_first_last = levratio(first_last_str, name)
 
             if lev_first_last == 1:
-                return dict_id
+                return obj.id
 
             elif lev_first_last > 0.6:
-                match_list.append([dict_id, val['name'], val['dob'], val['sex']])
+                match_list.append(obj)
 
         # For non-person objects: Measure similarity by levenshtein distance.
         else:
-            lev_rat = levratio(val["name"], name)
+            lev_rat = levratio(obj.name, name)
 
             if lev_rat == 1:
-                return dict_id
+                return obj.id
 
             elif lev_rat > 0.6:
-                match_list.append([dict_id, val['name']])
+                match_list.append(obj)
 
     # Print list of potential matches for user to select from
     if not match_list:
@@ -367,15 +368,15 @@ def validate_obj_by_name(cls, name, inc_inac=0):
 
     if issubclass(cls, classes.person.Human):
         for count, match in enumerate(match_list):
-            print(f"{count + 1}) ID: {match[0]}, "
-                  f"Name: {match[1][0]}, {match[1][1]} {match[1][2]}, "
-                  f"DOB: {match[2].strftime('%d/%m/%Y')}"
-                  f"Sex: {match[3]}"
+            print(f"{count + 1}) ID: {obj.id}, "
+                  f"Name: {obj.name} "
+                  f"DOB: {obj.dob} "
+                  f"Sex: {obj.sex.capitalize()}"
                   )
 
     else:
         for count, match in enumerate(match_list):
-            print(f"{count + 1}) ID: {match[0]}, Name: {match[1]}")
+            print(f"{count + 1}) ID: {obj.id}, Name: {obj.name}")
 
     # Prompt user to select option from above
     while True:
@@ -391,7 +392,7 @@ def validate_obj_by_name(cls, name, inc_inac=0):
 
             # Check response by index in match list
             if 0 < selection <= len(match_list):
-                obj_id = match_list[selection - 1][0]
+                obj_id = match_list[selection - 1].id
                 return obj_id
 
             # Prompt user to break if record does not exist

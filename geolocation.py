@@ -1,4 +1,4 @@
-# Contains functions related to geolocation using Placekey and mlrose
+# Contains functions related to geolocation using Google OR tools and map APIs. Folium for visualisation.
 import folium
 from folium import plugins
 import osmnx as ox
@@ -7,7 +7,6 @@ import pandas as pd
 import numpy as np
 import validate
 import navigation
-import in_out
 import classes
 import boto3
 import requests
@@ -21,8 +20,8 @@ def optimize_route(obj):
     """
     Optimizes a single or team of clinicians' schedule for the day based on distance traveled for all assigned visits on
     that day. This uses a combination of Google's distance matrix API and Google OR tools.
-    :param obj: ID of clinician or team to optimize
-    :return: List of tuples of appointment coordinates for optimal travel time
+    :param obj: Clinician or team to optimize
+    :return: List of tuples of appointment addresses for optimal travel time
     """
     # Get date to optimise
     while True:
@@ -32,7 +31,7 @@ def optimize_route(obj):
             return 0
 
         try:
-            val_date = validate.valid_date(inp_date).date().strftime("%d/%m/%Y")
+            val_date = validate.valid_date(inp_date).date()
 
         except AttributeError:
             print("Invalid date format.")
@@ -44,30 +43,23 @@ def optimize_route(obj):
     # If team, load list of all linked clinicians
     if isinstance(obj, classes.team.Team):
         # Cancel if team is empty
-        if not obj.pat_load:
-            print("This team does not have any patients associated with it. Exiting...")
+        if not obj.pats:
+            print("This team does not have any patients associated with it. Returning...")
             sleep(1.5)
             return 0
 
-        clins = [in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{clin_id}.pkl") for clin_id in
-                 obj._clin_id]
+        if not obj.clins:
+            print("This team does not have any clinicians associated with it. Returning...")
+            sleep(1.5)
+            return 0
+
+        clins = obj.clins
 
         # Grab patients linked to team
-        pats = [in_out.load_obj(classes.person.Patient, f"./data/Patient/{pat_id}.pkl") for pat_id in obj._pat_id]
+        pats = obj.pats
 
         # Grab all visits across all patients in team, then unpack for single list of team visits
-        visits = []
-
-        for pat in pats:
-            # Handle key errors for patients who do not have visits on the designated day
-            try:
-                visit_group = pat.visits[val_date]
-            except KeyError:
-                continue
-
-            for visit_id in visit_group:
-                visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
-                visits.append(visit)
+        visits = [visit for pat in pats for visit in pat.visits if visit._exp_date == val_date]
 
         if not visits:
             print("There are no visits assigned on this date. Returning...")
@@ -78,22 +70,21 @@ def optimize_route(obj):
     elif isinstance(obj, classes.person.Clinician):
         clins = [obj]
 
-        try:
-            visits_by_date = obj.visits[val_date]
+        visits = [visit for visit in obj.visits if visit._exp_date == val_date]
 
-        except KeyError:
+        if not visits:
             print("There are no visits assigned on this date. Returning...")
             sleep(1.5)
             return 0
-
-        # Create a list of visits by loading all visits attached to the clinician if they are scheduled for input date.
-        visits = [in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl") for visit_id in visits_by_date]
 
     # Generate data for optimisation problem. Pass clinician as a list top proper handling.
     data_dict = generate_data(visits, clins)
 
     # Generate distance matrix
     dist_matrix = create_dist_matrix(data_dict["plus_code_list"])
+
+    if not dist_matrix.any():
+        return 0
 
     # Calculate optimal route - this returns a list of lists per clinician, so can safely assume we want index 0
     manager, routing, solution = route_optimizer(dist_matrix, len(clins), data_dict["start_list"],
@@ -115,8 +106,10 @@ def optimize_route(obj):
             dropped_nodes[node] = "Skill/Discipline Mismatch" if routing.GetDisjunctionMaxCardinality(
                 node) <= 1 else "Time Window Mismatch"
 
-    # Create optimal route order and assign to each clinician. Pass clin as list for proper handling
-    return_solution(clins, visits, len(data_dict["start_list"]), dropped_nodes, manager, routing, solution)
+    # Open session to commit changes before prompting route display
+    with obj.session_scope():
+        # Create optimal route order and assign to each clinician. Pass clin as list for proper handling.
+        return_solution(clins, visits, len(data_dict["start_list"]), dropped_nodes, manager, routing, solution)
 
     # Prompt user for which type of map to load
     confirm = validate.yes_or_no("View route on map?: ")
@@ -144,8 +137,8 @@ def generate_data(visits, clins):
     visit_plus_codes = [visit.plus_code for visit in visits]
 
     # Load all clinicians in team and populate list of start and end plus codes
-    start_list = [clin.start_plus_code for clin in clins]
-    end_list = [clin.end_plus_code for clin in clins]
+    start_list = [clin._start_plus_code for clin in clins]
+    end_list = [clin._end_plus_code for clin in clins]
 
     # Combine clinician and patient addresses together
     plus_code_list = start_list + visit_plus_codes + end_list
@@ -374,7 +367,6 @@ def route_optimizer(dist_matrix, num_clinicians, start_list, end_list,
 def create_dist_matrix(plus_code_list):
     """
     Generates a distance matrix using place_ids.
-    :param clin: clinician used to extract start and end address
     :param plus_code_list: List of plus codes to calculate into a distance matrix
     :return: distance matrix
     """
@@ -559,8 +551,6 @@ def build_dist_matrix(response):
     Takes response from distance matrix API to add rows to the distance matrix. We will use travel time rather than
     distance.
     :param response: response from Google's distance matrix API
-    :param num_addresses: Number of addresses to set array size for columns
-    :param rows: Number of rows being included in response
     :return: row for distance matrix
     """
     distance_matrix = []
@@ -608,7 +598,7 @@ def return_solution(clins, visits, n_start_list, dropped_nodes, manager, routing
             disj_reason = dropped_nodes[node]
             node = node - n_start_list
             print(
-                f"{node}) {visits[node].patient_name}: {visits[node].time_earliest} - {visits[node].time_latest}, "
+                f"{node}) {visits[node].pat._name}: {visits[node].time_earliest} - {visits[node].time_latest}, "
                 f"Priority: {visits[node].visit_priority}, Complexity: {visits[node].visit_complexity}, "
                 f"Disjunction Reason: {disj_reason}")
 
@@ -624,7 +614,8 @@ def return_solution(clins, visits, n_start_list, dropped_nodes, manager, routing
             # Assign clinician to visit (which assigns the visit to the clinician as well) and save
             for visit in clin_visits:
                 visit.clin_id = clin.id
-                visit.write_self()
+                visit.sched_status = "assigned"
+                visit.write_obj(visit.session)
 
         return None
 
@@ -637,7 +628,7 @@ def return_solution(clins, visits, n_start_list, dropped_nodes, manager, routing
             node = node - n_start_list
             dropped_nodes_dict[visits[node].id] = {
                 "Clinician": "UNASSIGNED",
-                "Patient Name": visits[node].patient_name,
+                "Patient Name": visits[node].pat._name,
                 "Start By": visits[node].time_earliest,
                 "Leave By": visits[node].time_latest,
                 "Priority": visits[node].visit_priority,
@@ -670,7 +661,8 @@ def return_solution(clins, visits, n_start_list, dropped_nodes, manager, routing
             # Assign clinician to visit (which assigns the visit to the clinician as well) and save
             for visit in clin_visits:
                 visit.clin_id = clin.id
-                visit.write_self()
+                visit.sched_status = "assigned"
+                visit.write_obj(visit.session)
 
             # Convert rt_details to Pandas table and display
             rt_detail = pd.DataFrame.from_dict(rt_detail, orient="index")
@@ -739,7 +731,7 @@ def print_to_screen(clin_index, clin, visits, n_start_list, manager, routing, so
         time_var = time_dimension.CumulVar(index)
         start_hours, start_min = divmod(solution.Min(time_var), 60)
         end_hours, end_min = divmod(solution.Max(time_var), 60)
-        plan_output += f'  {visit.patient_name} ' \
+        plan_output += f'  {visit.pat._name} ' \
                        f'(Start by: {datetime.time(hour=start_hours, minute=start_min).strftime("%H%M")}, ' \
                        f'Leave by: {datetime.time(hour=end_hours, minute=end_min).strftime("%H%M")}) ->'
         index = solution.Value(routing.NextVar(index))
@@ -789,7 +781,7 @@ def print_to_table(clin_index, clin, visits, n_start_list, manager, routing, sol
         end_hours, end_min = divmod(solution.Max(time_var), 60)
         solutions_dict[visit.id] = {
             "Clinician": clin.name,
-            "Patient Name": visit.patient_name,
+            "Patient Name": visit.pat._name,
             "Start By": datetime.time(hour=start_hours, minute=start_min).strftime("%H%M"),
             "Leave By": datetime.time(hour=end_hours, minute=end_min).strftime("%H%M"),
             "Priority": visit.visit_priority,
@@ -835,8 +827,14 @@ def coord_average(coord_list):
     :return: Tuple of average longitude and latitude
     """
     # Split latitude and longitude
-    lat_list = np.array([coord[0] for coord_group in coord_list for coord in coord_group])
-    long_list = np.array([coord[1] for coord_group in coord_list for coord in coord_group])
+    lats = [coord[0] for coord_group in coord_list for coord in coord_group]
+    lngs = [coord[1] for coord_group in coord_list for coord in coord_group]
+
+    if not lats or not lngs:
+        return 0
+
+    lat_list = np.array(lats)
+    long_list = np.array(lngs)
 
     # Average latitude and longitude
     mean_lat = lat_list.mean()
@@ -876,13 +874,13 @@ def display_route(obj, val_date=None):
     # Prompt user for date for optimization and validate format
     if not val_date:
         while True:
-            inp_date = validate.qu_input("Please select a date to optimize the route: ")
+            inp_date = validate.qu_input("Please select a date to view the route: ")
 
             if not inp_date:
                 return 0
 
             try:
-                val_date = validate.valid_date(inp_date).date().strftime("%d/%m/%Y")
+                val_date = validate.valid_date(inp_date).date()
 
             except AttributeError:
                 print("Invalid date format.")
@@ -893,8 +891,7 @@ def display_route(obj, val_date=None):
 
     # If team, load list of all linked clinicians
     if isinstance(obj, classes.team.Team):
-        clins = [in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{clin_id}.pkl") for clin_id in
-                 obj._clin_id]
+        clins = obj.clins
 
     # If clin, put clin into list for consistent handling
     elif isinstance(obj, classes.person.Clinician):
@@ -904,20 +901,8 @@ def display_route(obj, val_date=None):
         print("Invalid object. Returning...")
         return 0
 
-    # Load list of visits for each clinician
-    visits = []
-    for clin in clins:
-        # Handle key errors for clinicians who do not have visits on the designated day
-        try:
-            clin_visits = clin.visits[val_date]
-        except KeyError:
-            continue
-
-        visit_list = []
-        for visit_id in clin_visits:
-            visit = in_out.load_obj(classes.visits.Visit, f"./data/Visit/{visit_id}.pkl")
-            visit_list.append(visit)
-        visits.append(visit_list)
+    # Load list of visits for each clinician as a list of lists
+    visits = [[visit for visit in clin.visits if visit._exp_date == val_date] for clin in clins]
 
     # Prompt user for which type of map to load
     print("Please select how you would like to view the route:\n"
@@ -951,6 +936,10 @@ def map_markers_only(clins, visits):
     visit_locations = [[visit.coord for visit in visit_group] for visit_group in visits]
     center_coord = coord_average(visit_locations)
 
+    if not center_coord:
+        print("No visits assigned on this date. Returning...")
+        return 0
+
     # Initialize map and set boundaries.
     route_map = folium.Map(location=center_coord)
     route_map.fit_bounds(visit_locations)
@@ -960,6 +949,9 @@ def map_markers_only(clins, visits):
 
     # Loop through each coord group by clinician and create a new marker and tooltip, assorted by color for each clinician
     for clin_index, clin in enumerate(clins):
+        if not clin.visits:
+            continue
+
         # Add feature group for each clinician so they can be turned on or off
         feature_group = folium.FeatureGroup(name=f"{clin.name}").add_to(route_map)
 
@@ -984,7 +976,7 @@ def map_markers_only(clins, visits):
         # Loop through visit coordinates and mark on map
         for visit_index, coord in enumerate(visit_locations[clin_index]):
             visit_tooltip = f"""
-                        <center><h4>{visit_index + 1}. {visits[clin_index][visit_index].patient_name}</h4></center>
+                        <center><h4>{visit_index + 1}. {visits[clin_index][visit_index].pat._name}</h4></center>
                         <p><b>Address</b>: {visits[clin_index][visit_index].address}</p>
                         <p><b>Time Window</b>: {visits[clin_index][visit_index].time_earliest} - {visits[clin_index][visit_index].time_latest}</p>
                         <p><b>Priority</b>: {visits[clin_index][visit_index].visit_priority}</p>
@@ -1053,6 +1045,12 @@ def map_markers_and_polyline(clins, visits):
     """
     # Load coordinates for each visit and start and end coords for each clinician
     visit_locations = [[visit.coord for visit in visit_group] for visit_group in visits]
+    # Calculate central point to initialize map
+    center_coord = coord_average(visit_locations)
+
+    if not center_coord:
+        print("No visits assigned on this date. Returning...")
+        return 0
 
     # Get coordinates for bounding box
     start_locations = [clin.start_coord for clin in clins]
@@ -1071,8 +1069,7 @@ def map_markers_and_polyline(clins, visits):
     mode = 'drive'  # "all_private", "all", "bike", "drive", "drive_service", "walk"
     graph = ox.graph_from_bbox(north_bbox_lim, south_bbox_lim, east_bbox_lim, west_bbox_lim, network_type=mode)
 
-    # Calculate central point to initialize map
-    center_coord = coord_average(visit_locations)
+
 
     # Initialize map and set boundaries.
     route_map = folium.Map(location=center_coord)
@@ -1086,6 +1083,9 @@ def map_markers_and_polyline(clins, visits):
 
     for clin_index, clin in enumerate(clins):
         # Create subgroups for each clinician in group
+        if not clin.visits:
+            continue
+
         sub_marker_group = plugins.FeatureGroupSubGroup(marker_group,
                                                                name=f"Markers - {clins[clin_index].name}").add_to(
             route_map)
@@ -1130,7 +1130,7 @@ def map_markers_and_polyline(clins, visits):
                 sub_route_group.add_child(folium.PolyLine(coords, weight=3, color=color_list[clin_index]))
 
                 visit_tooltip = f"""
-                            <center><h4>{visit_index + 1}. {visit.patient_name}</h4></center>
+                            <center><h4>{visit_index + 1}. {visit.pat._name}</h4></center>
                             <p><b>Address</b>: {visit.address}</p>
                             <p><b>Time Window</b>: {visit.time_earliest} - {visit.time_latest}</p>
                             <p><b>Priority</b>: {visit.visit_priority}</p>

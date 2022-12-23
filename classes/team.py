@@ -1,20 +1,36 @@
 # This file contains the Visit class to be used in the route optimisation tool.
 import itertools
-
+from sqlalchemy import Column, String, Integer, PickleType
+from sqlalchemy.orm import relationship
+from sqlalchemy.ext.mutable import MutableList
+from data_manager import DataManagerMixin
 import geolocation
 import validate
-import in_out
-import classes
 import navigation
 
 
-class Team:
+class Team(DataManagerMixin, DataManagerMixin.Base):
+    # Initialise table details
+    __tablename__ = "Team"
+    _id = Column(Integer, primary_key=True, unique=True)
+    _name = Column(String)
+    pats = relationship("Patient", back_populates="team")
+    clins = relationship("Clinician", back_populates="team")
+    _status = Column(String, nullable=True)
+    _address = Column(String, nullable=True)
+    _zip_code = Column(String, nullable=True)
+    _building = Column(String, nullable=True)
+    _lat = Column(Integer, nullable=True)
+    _lng = Column(Integer, nullable=True)
+    _plus_code = Column(String, nullable=True)
+
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
-    _tracked_instances = {}
 
     def __init__(self, status=1, name=None, address=None, **kwargs):
         """Initializes a new request and links with pat_id. It contains the following attributes:
             req_id, pat_id, name, status, address, the earliest time, latest time, sched status, and cancel_reason"""
+        super().__init__()
+
         self._id = next(self._id_iter)
         self._name = name
         self.status = status
@@ -60,34 +76,37 @@ class Team:
         Displays an address parsed using USAddress. Loops through values in dictionary to output human-readable address.
         :return: Human-readable address
         """
-        return self._address["address"]
+        return self._address
 
     @address.setter
     def address(self, value):
         """Checks values of address before assigning"""
-        address = validate.valid_address(value)
-
-        if not isinstance(address, Exception):
-            self._address = address
+        if not value:
+            self._address = None
 
         else:
-            raise ValueError("Please enter a complete and valid address.\n")
+            address = validate.valid_address(value)
 
-    @property
-    def zip_code(self):
-        return self._address["zip_code"]
+            if not isinstance(address, Exception):
+                self._address = address["address"]
+                self._lat = address["coord"][0]
+                self._lng = address["coord"][1]
+                self._zip_code = address["zip_code"]
+                try:
+                    self._building = address["building"]
+                except KeyError:
+                    self._building = None
+                try:
+                    self._plus_code = address["plus_code"]
+                except KeyError:
+                    self._plus_code = self._address
 
-    @property
-    def building(self):
-        return self._address["building"]
+            else:
+                raise ValueError("Please enter a complete and valid address.\n")
 
     @property
     def coord(self):
-        return self._address["coord"]
-
-    @property
-    def plus_code(self):
-        return self._address["plus_code"]
+        return self._lat, self._lng
 
     def update_self(self):
         """
@@ -111,11 +130,13 @@ class Team:
 
             # Update request date and time
             elif selection == "1":
-                self.update_name()
+                with self.session_scope():
+                    self.update_name()
 
             # Update request address
             elif selection == "2":
-                self.update_address()
+                with self.session_scope():
+                    self.update_address()
 
             # Optimize route
             elif selection == "3":
@@ -127,7 +148,8 @@ class Team:
 
             # Inactivate record
             elif selection == "5":
-                self.inactivate_self()
+                with self.session_scope():
+                    self.inactivate_self()
                 return 0
 
             else:
@@ -148,7 +170,7 @@ class Team:
 
             # Update all attributes from above. Quit if user quits during any attribute
             if not validate.get_info(self, attr_list):
-                self.refresh_self()
+                self.refresh_self(self.session)
                 return 0
 
             detail_dict = {
@@ -157,10 +179,10 @@ class Team:
 
             # If user does not confirm info, changes will be reverted.
             if not validate.confirm_info(self, detail_dict):
-                self.refresh_self()
+                self.refresh_self(self.session)
                 return 0
 
-            self.write_self()
+            self.write_obj(self.session)
             return 1
 
     def update_address(self):
@@ -177,7 +199,7 @@ class Team:
 
         # Update all attributes from above. Quit if user quits during any attribute
         if not validate.get_info(self, attr_list):
-            self.refresh_self()
+            self.refresh_self(self.session)
             return 0
 
         detail_dict = {
@@ -186,24 +208,20 @@ class Team:
 
         # If user does not confirm info, changes will be reverted.
         if not validate.confirm_info(self, detail_dict):
-            self.refresh_self()
+            self.refresh_self(self.session)
             return 0
 
-        self.write_self()
+        self.write_obj(self.session)
         return 1
 
-    def write_self(self):
-        """Writes the object to file as a .pkl using the pickle module"""
-        if in_out.write_obj(self):
-            return 1
-
     @classmethod
-    def create_self(cls):
+    def create_self(cls, session):
         """
         Loops through each detail and assigns to the object.
         If any response is blank, the user will be prompted to quit or continue.
         If they continue, they will begin at the element that the quit out of
         Once details are completed, the user is prompted to review information and complete creation.
+        :param session: Session for querying database
         :return:
             1 if the user completes initialization
             0 if the user does not
@@ -231,33 +249,13 @@ class Team:
             "Address": obj.address
         }
 
-        # If user confirms information is correct, a new object is created, written, and added to _tracked_instances
+        # If user confirms information is correct, a new object is created and written to db
         if not validate.confirm_info(obj, detail_dict):
             print("Record not created.")
             return 0
 
-        obj.write_self()
+        obj.write_obj(session)
         return obj
-
-    def refresh_self(self):
-        """Refreshes an existing object from file in the in case users need to back out changes. Returns the object"""
-        print("Reverting changes...")
-        in_out.load_obj(type(self), f"./data/{self.__class__.__name__}/{self.id}.pkl")
-
-    @classmethod
-    def load_self(cls):
-        """Class method to initialise the object from file. Returns the object"""
-        obj = in_out.get_obj(cls)
-
-        if not obj:
-            return 0
-
-        else:
-            return obj
-
-    @classmethod
-    def load_tracked_instances(cls):
-        in_out.load_tracked_obj(cls)
 
     def inactivate_self(self):
         """
@@ -287,42 +285,42 @@ class Team:
         self.status = 0
 
         # Remove team from patients and clinicians
-        if self._pat_id:
-            for pat_id in self._pat_id:
-                pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{pat_id}.pkl")
-
+        if self.pats:
+            for pat in self.pats:
                 # If any linked patients fail to load, refresh and cancel action.
                 if not pat:
                     print("Unable to load linked patient.")
-                    self.refresh_self()
+                    self.refresh_self(self.session)
                     return 0
 
-                pat.team_id = None
-                pat.write_self()
+                pat._team_id = None
 
-        if self._clin_id:
-            for clin_id in self._clin_id:
-                clin = in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{clin_id}.pkl")
-
+        if self.clins:
+            for clin in self.clins:
                 # If any linked clinicians fail to load, refresh and cancel action.
                 if not clin:
                     print("Unable to load linked clinician.")
-                    self.refresh_self()
+                    self.refresh_self(self.session)
                     return 0
 
-                clin.team_id = None
-                clin.write_self()
+                clin._team_id = None
 
-        self.write_self()
+        self.write_obj(self.session)
         print("Record successfully inactivated.")
 
         return 1
 
     def optimize_route(self):
-        """Calculates the estimated route for all clinicians on the team."""
-        geolocation.optimize_route(self.id)
+        """
+        Calculates the estimated route for all clinicians on the team.
+        """
+        with self.session_scope():
+            geolocation.optimize_route(self)
 
     def display_route(self):
-        """Displays the route for all clinicians on the team."""
-        geolocation.display_route(self.id)
+        """
+        Displays the route for all clinicians on the team.
+        """
+        with self.session_scope():
+            geolocation.display_route(self)
     # TODO: Add a class method to reactivate a record

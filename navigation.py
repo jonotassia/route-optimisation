@@ -1,10 +1,10 @@
 # This file contains functions to be used in the creating the GUI.
 # Stick with TUI for now, but launch completed map into web-browser or GUI
-import in_out
 import validate
 import geolocation
 import os
 import classes
+from data_manager import DataManagerMixin
 
 
 def clear():
@@ -46,10 +46,14 @@ def main_menu(class_list):
 
         # TODO: Remove before deployment
         elif selection == "dev":
-            in_out.import_csv(classes.team.Team, "./investigation/team_import.csv")
-            in_out.import_csv(classes.person.Patient, "./investigation/pat_import.csv")
-            in_out.import_csv(classes.person.Clinician, "./investigation/clin_import.csv")
-            in_out.import_csv(classes.visits.Visit, "./investigation/visit_import.csv")
+            with DataManagerMixin.class_session_scope() as session:
+                classes.team.Team.import_csv(session, filepath="./investigation/team_import.csv")
+            with DataManagerMixin.class_session_scope() as session:
+                classes.person.Patient.import_csv(session, filepath="./investigation/pat_import.csv")
+            with DataManagerMixin.class_session_scope() as session:
+                classes.person.Clinician.import_csv(session, filepath="./investigation/clin_import.csv")
+            with DataManagerMixin.class_session_scope() as session:
+                classes.visits.Visit.import_csv(session, filepath="./investigation/visit_import.csv")
 
         else:
             print("Invalid selection.")
@@ -85,12 +89,14 @@ def obj_menu(class_list):
                 break
 
             if selection == "1":
-                obj_selection(cls)
-                continue
+                with cls.class_session_scope() as session:
+                    obj_selection(cls, session)
+                    continue
 
             elif selection == "2":
-                create_object_director(cls)
-                continue
+                with cls.class_session_scope() as session:
+                    create_object_director(cls, session)
+                    continue
 
             elif selection == "3":
                 import_export_menu(cls)
@@ -127,17 +133,17 @@ def class_selection(class_list):
         return cls
 
 
-def obj_selection(cls):
+def obj_selection(cls, session):
     """
     Prompts user for a class to enter, then asks for an object name or ID.
     If it exists, moves them to the modify or inactivate function.
     If it does not, prompts them to create a new object.
-    :param class_list: List of classes. Inherited from main function
+    :param session: Session for querying database
     :return: None
     """
     while True:
         # Prompt user for object details and load object
-        obj = cls.load_self()
+        obj = cls.get_obj(session)
 
         # If object exists, send user to modification screen. If record inactivated, quit.
         if obj:
@@ -146,16 +152,17 @@ def obj_selection(cls):
 
         # If object does not exist, prompt user to create object as appropriate based on class.
         else:
-            create_object_director(cls)
+            create_object_director(cls, session)
 
         if not validate.yes_or_no("Search for another object? "):
             break
 
 
-def create_object_director(cls):
+def create_object_director(cls, session):
     """
     Directs the system to create a new record based on its class.
     :param cls: Class of object to be created.
+    :param session: Session for querying database
     :return: None
     """
     clear()
@@ -164,7 +171,7 @@ def create_object_director(cls):
     cont = validate.yes_or_no("\nCreate a new record? ")
 
     if cont:
-        obj = cls.create_self()
+        obj = cls.create_self(session)
         return obj
 
 
@@ -188,16 +195,18 @@ def import_export_menu(cls):
             return 0
 
         elif selection == "1":
-            in_out.generate_flat_file(cls)
+            cls.generate_flat_file()
             continue
 
         elif selection == "2":
-            in_out.export_csv(cls)
-            continue
+            with cls.class_session_scope() as session:
+                cls.export_csv(session)
+                continue
 
         elif selection == "3":
-            in_out.import_csv(cls)
-            continue
+            with cls.class_session_scope() as session:
+                cls.import_csv(session)
+                continue
 
         else:
             print("Invalid selection.")
@@ -222,16 +231,18 @@ def geo_feat():
             return 0
 
         elif selection == "1":
-            obj = classes.person.Clinician.load_self()
-            if not obj:
-                continue
-            geolocation.optimize_route(obj)
+            with classes.person.Clinician.class_session_scope() as session:
+                obj = classes.person.Clinician.get_obj(session)
+                if not obj:
+                    continue
+                obj.optimize_route()
 
         elif selection == "2":
-            obj = classes.team.Team.load_self()
-            if not obj:
-                continue
-            geolocation.optimize_route(obj)
+            with classes.team.Team.class_session_scope() as session:
+                obj = classes.team.Team.get_obj(session)
+                if not obj:
+                    continue
+                obj.optimize_route()
 
         elif selection == "3":
             # Prompt user for which type of record to load
@@ -247,16 +258,18 @@ def geo_feat():
                     return 0
 
             if selection == "1":
-                obj = classes.person.Clinician.load_self()
-                if not obj:
-                    continue
-                geolocation.display_route(obj)
+                with classes.person.Clinician.class_session_scope() as session:
+                    obj = classes.person.Clinician.get_obj(session)
+                    if not obj:
+                        continue
+                    obj.display_route()
 
             elif selection == "2":
-                obj = classes.team.Team.load_self()
-                if not obj:
-                    continue
-                geolocation.display_route(obj)
+                with classes.team.Team.class_session_scope() as session:
+                    obj = classes.team.Team.get_obj(session)
+                    if not obj:
+                        continue
+                    obj.display_route()
 
             continue
 

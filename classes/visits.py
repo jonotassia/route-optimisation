@@ -1,17 +1,35 @@
 # This file contains the Visit class to be used in the route optimisation tool.
-import pickle
 import itertools
 import validate
-import in_out
 import classes
 import navigation
+from sqlalchemy import Column, String, Date, Time, Integer, PickleType, ForeignKey
+from sqlalchemy.ext.mutable import MutableList
+from sqlalchemy.orm import relationship
+from data_manager import DataManagerMixin
 from datetime import datetime, date
 
 
-class Visit:
+class Visit(DataManagerMixin, DataManagerMixin.Base):
+    # Initialise table details
+    __tablename__ = "Visit"
+    _id = Column(Integer, primary_key=True, unique=True)
+    _status = Column(String, nullable=True)
+    _pat_id = Column(Integer, ForeignKey("Patient._id"))
+    pat = relationship("Patient", back_populates="visits")
+    _clin_id = Column(Integer, ForeignKey("Clinician._id"), nullable=True)
+    clin = relationship("Clinician", back_populates="visits")
+    _exp_date = Column(Date, nullable=True)
+    _time_earliest = Column(Time, nullable=True)
+    _time_latest = Column(Time, nullable=True)
+    _visit_priority = Column(String, nullable=True)
+    _visit_complexity = Column( String, nullable=True)
+    _skill_list = Column(MutableList.as_mutable(PickleType), nullable=True)
+    _discipline = Column(String, nullable=True)
+    _cancel_reason = Column(String, nullable=True)
+    _sched_status = Column(String, nullable=True)
+
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
-    _tracked_instances = {}
-    _instance_by_date = {}
     _c_visit_complexity = ("simple", "routine", "complex")
     _c_visit_priority = ("green", "amber", "red")
     _c_skill_list = classes.person.Clinician._c_skill_list
@@ -24,6 +42,8 @@ class Visit:
                  skill_list=[], discipline="", **kwargs):
         """Initializes a new request and links with pat_id. It contains the following attributes:
             req_id, pat_id, name, status, the earliest time, latest time, sched status, and cancel_reason"""
+        super().__init__()
+
         self._id = next(self._id_iter)
         self.exp_date = exp_date
         self.pat_id = pat_id
@@ -73,51 +93,12 @@ class Visit:
 
     @pat_id.setter
     def pat_id(self, value):
-        # NOTE: Unnecessary to have code to remove from old patient because this should only ever be set once
-        # Check valid ID
-        if value in classes.person.Patient._tracked_instances:
-            # Load patient and create or add to the search by date list for visits
-            pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{value}.pkl")
-
-            # Add visit to patient if not already listed
-            try:
-                if self.id not in pat.visits[self.exp_date]:
-                    pat.visits[self.exp_date].append(self.id)
-
-            except KeyError:
-                pat.visits[self.exp_date] = [self.id]
-
-            pat.write_self()
+        # Check valid ID and oad patient and create or add to the search by date list for visits
+        if classes.person.Patient.load_obj(self.session, value):
             self._pat_id = value
 
         else:
             raise ValueError("This is not a valid patient ID.\n")
-
-    @pat_id.deleter
-    def pat_id(self):
-        # Load patient and create or add to the search by date list for visits.
-        pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self.pat_id}.pkl")
-        try:
-            pat.visits[self.exp_date].remove(self.id)
-
-        except KeyError:
-            pat.visits[self.exp_date] = [self.id]
-        pat.write_self()
-
-    @property
-    def patient_name(self):
-        if self._pat_id:
-            name = classes.person.Patient._tracked_instances[self._pat_id]["name"]
-            try:
-                middle_name = name[2]
-
-            except TypeError:
-                middle_name = None
-
-            return f"{name[0]}, {name[1]} {middle_name}"
-
-        else:
-            return None
 
     @property
     def clin_id(self):
@@ -129,60 +110,13 @@ class Visit:
         if not value:
             self._clin_id = None
 
-        elif value in classes.person.Clinician._tracked_instances:
-            # Load clinician and create or add to the search by date list for visits
-            old_clin_id = self._clin_id
-
-            # Remove from old clinician if there is one
-            if old_clin_id:
-                if old_clin_id != value:
-                    old_clin = in_out.load_obj(classes.person.Patient, f"./data/Clinician/{old_clin_id}.pkl")
-                    old_clin.visits[self.exp_date].remove(self.id)
-                    old_clin.write_self()
-
-            clin = in_out.load_obj(classes.person.Patient, f"./data/Clinician/{value}.pkl")
-
-            # If the visit is not already assigned to the clinician, assign it
-            try:
-                if self.id not in clin.visits[self.exp_date]:
-                    clin.visits[self.exp_date].append(self.id)
-
-            except KeyError:
-                clin.visits[self.exp_date] = [self.id]
-
-            clin.write_self()
-
+        # If clin exists, add to visit
+        elif classes.person.Clinician.load_obj(self.session, value):
             self._clin_id = value
+            self.sched_status = "assigned"
 
         else:
             raise ValueError("This is not a valid clinician ID.\n")
-
-    @clin_id.deleter
-    def clin_id(self):
-        # Load patient and create or add to the search by date list for visits
-        clin = in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{self.clin_id}.pkl")
-        try:
-            clin.visits[self.exp_date].remove(self.id)
-
-        except KeyError:
-            clin.visits[self.exp_date] = [self.id]
-
-        clin.write_self()
-
-    @property
-    def clinician_name(self):
-        if self._clin_id:
-            name = classes.person.Clinician._tracked_instances[self._clin_id]["name"]
-            try:
-                middle_name = self._name[2]
-
-            except TypeError:
-                middle_name = None
-
-            return f"{name[0]}, {name[1]} {middle_name}"
-
-        else:
-            return None
 
     @property
     def address(self):
@@ -190,81 +124,45 @@ class Visit:
         Displays an address parsed using USAddress. Loops through values in dictionary to output human-readable address.
         :return: Human-readable address
         """
-        pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}.pkl")
-        return pat.address
+        return self.pat._address
 
     @property
     def zip_code(self):
-        pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}.pkl")
-        return pat.zip_code
+        return self.pat._zip_code
 
     @property
     def building(self):
-        pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}.pkl")
-        return pat.building
+        return self.pat._building
 
     @property
     def coord(self):
-        pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}.pkl")
-        return pat.coord
+        return self.pat.coord
 
     @property
     def plus_code(self):
-        pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self.pat_id}.pkl")
-        return pat.plus_code
+        return self.pat._plus_code
 
     @property
     def exp_date(self):
-        return str(self._exp_date.date().strftime("%d/%m/%Y"))
+        return str(self._exp_date.strftime("%d/%m/%Y"))
 
     @exp_date.setter
     def exp_date(self, value):
         """Checks values of expected date before assigning"""
-        date = validate.valid_date(value)
-
-        if isinstance(date, Exception):
-            raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
-
-        elif date.date() < date.today().date():
-            raise ValueError("Date cannot be before today.\n")
+        if not value:
+            self._exp_date = None
 
         else:
-            # Handle date changes if reimporting an existing visit by grabbing the old visit date from instance list
-            old_visit_date = ""
-            try:
-                old_visit_date = Visit._tracked_instances[self.id]["date"]
+            date = validate.valid_date(value)
 
-            except KeyError:
-                pass
+            if isinstance(date, Exception):
+                raise ValueError("Please enter a valid date in the format DD/MM/YYYY.\n")
 
-            if old_visit_date:
-                try:
-                    self._instance_by_date[old_visit_date].remove(self.id)
+            elif date.date() < date.today().date():
+                raise ValueError("Date cannot be before today.\n")
 
-                except KeyError:
-                    pass
-
-                # Remove from patient if there is already an entry
-                try:
-                    pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self.pat_id}.pkl")
-                    if pat:
-                        pat.visits[old_visit_date].remove(self.id)
-                        pat.write_self()
-
-                except KeyError:
-                    pass
-
-                # Remove from clinician if there is already an entry
-                try:
-                    clin = in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{self.clin_id}.pkl")
-                    if clin:
-                        clin.visits[old_visit_date].remove(self.id)
-                        clin.write_self()
-
-                except KeyError:
-                    pass
-
-            self._exp_date = date
+            else:
+                self._exp_date = date
 
     @property
     def time_earliest(self):
@@ -273,13 +171,17 @@ class Visit:
     @time_earliest.setter
     def time_earliest(self, value):
         """Checks values of time window start before assigning"""
-        time = validate.valid_time(value)
-
-        if not isinstance(time, Exception):
-            self._time_earliest = time
+        if not value:
+            self._time_earliest = None
 
         else:
-            raise ValueError("Please enter a valid time in the format HHMM.\n")
+            time = validate.valid_time(value)
+
+            if not isinstance(time, Exception):
+                self._time_earliest = time
+
+            else:
+                raise ValueError("Please enter a valid time in the format HHMM.\n")
 
     @property
     def time_latest(self):
@@ -288,22 +190,26 @@ class Visit:
     @time_latest.setter
     def time_latest(self, value):
         """Checks values of time window end before assigning"""
-        # TODO: Figure out how to handle the midnight instance in time window and scheduling
-        time = validate.valid_time(value)
+        # TODO: Figure out how to handle the midnight instance in time window and scheduling (try using instants)
+        if not value:
+            self._time_latest = None
 
-        if not isinstance(time, Exception):
-            # If there is no start time window (unlikely), allow end time window to be set.
-            if not self.time_earliest:
-                self._time_latest = time
-
-            # If there is a start time window and it is before the start time, allow it to be set.
-            if self.time_earliest and time > self._time_earliest:
-                self._time_latest = time
-
-            else:
-                raise ValueError("End time cannot be before start time.")
         else:
-            raise ValueError("Please enter a valid time in the format HHMM.\n")
+            time = validate.valid_time(value)
+
+            if not isinstance(time, Exception):
+                # If there is no start time window (unlikely), allow end time window to be set.
+                if not self.time_earliest:
+                    self._time_latest = time
+
+                # If there is a start time window and it is before the start time, allow it to be set.
+                if self.time_earliest and time > self._time_earliest:
+                    self._time_latest = time
+
+                else:
+                    raise ValueError("End time cannot be before start time.")
+            else:
+                raise ValueError("Please enter a valid time in the format HHMM.\n")
 
     @property
     def visit_complexity(self):
@@ -442,22 +348,28 @@ class Visit:
 
             # Update request date and time
             elif selection == "1":
-                self.update_date_time()
+                with self.session_scope():
+                    self.update_date_time()
 
             elif selection == "2":
-                self.manual_assign_visit()
+                with self.session_scope():
+                    self.manual_assign_visit()
 
             elif selection == "3":
-                self.modify_skills()
+                with self.session_scope():
+                    self.modify_skills()
 
             elif selection == "4":
-                self.modify_discipline()
+                with self.session_scope():
+                    self.modify_discipline()
 
             elif selection == "5":
-                self.modify_priority_complexity()
+                with self.session_scope():
+                    self.modify_priority_complexity()
 
             elif selection == "6":
-                self.inactivate_self()
+                with self.session_scope():
+                    self.inactivate_self()
                 return 0
 
             else:
@@ -485,7 +397,7 @@ class Visit:
 
         # Update all attributes from above. Quit if user quits during any attribute
         if not validate.get_info(self, attr_list):
-            self.refresh_self()
+            self.refresh_self(self.session)
             return 0
 
         # Save old date for searching and updating instances_by_date index
@@ -498,14 +410,11 @@ class Visit:
 
         # If user does not confirm info, changes will be reverted.
         if not validate.confirm_info(self, detail_dict):
-            self.refresh_self()
+            self.refresh_self(self.session)
             return 0
 
-        # Remove visit from instances_by_date index
-        self._instance_by_date[old_date].remove(self.id)
-
         # Save and update instance lists
-        self.write_self()
+        self.write_obj(self.session)
 
         return 1
 
@@ -557,7 +466,7 @@ class Visit:
         :return: 1 if successful
         """
         print("Please select a clinician to assign this visit.")
-        clin = classes.person.Clinician.load_self()
+        clin = classes.person.Clinician.get_obj(self.session)
 
         if not clin:
             return 0
@@ -567,7 +476,7 @@ class Visit:
         self._sched_status = self._c_sched_status[1]
 
         # Write changes to file
-        self.write_self()
+        self.write_obj(self.session)
         return 1
 
     def unassign_visit(self):
@@ -575,21 +484,13 @@ class Visit:
         Assigns the visit to a clinician.
         :return: 1 if successful
         """
-        # Remove visit from assigned clinician
-        clin = in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{self._clin_id}.pkl")
-
         # If linked clinician fails to load, refresh and cancel action.
-        if not clin:
-            print("Unable to load linked clinician.")
-            self.refresh_self()
+        if not self._clin_id:
+            print("This patient does not have an assigned clinician.")
             return 0
 
-        # Remove visit from clinician and unassign clinician to visit
-        clin.visits[self.exp_date].remove(self.id)
-        clin.write_self()
-
         self._clin_id = ""
-        self.write_self()
+        self.write_obj(self.session)
 
         return 1
 
@@ -601,8 +502,8 @@ class Visit:
         # Output linked visit details
         detail_dict = {
             "Visit ID": self.id,
-            "Patient": self.patient_name,
-            "Clinician": self.clinician_name,
+            "Patient": self.pat._name,
+            "Clinician": self.clin._name,
             "Visit Address": self.address,
             "Expected Date": self.exp_date,
             "Time Window": f"{self.time_earliest} - {self.time_latest}"
@@ -631,7 +532,7 @@ class Visit:
 
         # Update all attributes from above. Quit if user quits during any attribute
         if not validate.get_info(self, attr_list):
-            self.refresh_self()
+            self.refresh_self(self.session)
             return 0
 
         detail_dict = {
@@ -640,16 +541,11 @@ class Visit:
 
         # If user does not confirm info, changes will be reverted.
         if not validate.confirm_info(self, detail_dict):
-            self.refresh_self()
+            self.refresh_self(self.session)
             return 0
 
-        self.write_self()
+        self.write_obj(self.session)
         return 1
-
-    def write_self(self):
-        """Writes the object to file as a .pkl using the pickle module"""
-        if in_out.write_obj(self):
-            return 1
 
     def modify_discipline(self):
         """
@@ -666,7 +562,7 @@ class Visit:
 
         # Update all attributes from above. Quit if user quits during any attribute
         if not validate.get_info(self, attr_list):
-            self.refresh_self()
+            self.refresh_self(self.session)
             return 0
 
         detail_dict = {
@@ -675,10 +571,10 @@ class Visit:
 
         # If user does not confirm info, changes will be reverted.
         if not validate.confirm_info(self, detail_dict):
-            self.refresh_self()
+            self.refresh_self(self.session)
             return 0
 
-        self.write_self()
+        self.write_obj(self.session)
         return 1
 
     def modify_priority_complexity(self):
@@ -701,7 +597,7 @@ class Visit:
 
         # Update all attributes from above. Quit if user quits during any attribute
         if not validate.get_info(self, attr_list):
-            self.refresh_self()
+            self.refresh_self(self.session)
             return 0
 
         detail_dict = {
@@ -711,16 +607,15 @@ class Visit:
 
         # If user does not confirm info, changes will be reverted.
         if not validate.confirm_info(self, detail_dict):
-            self.refresh_self()
+            self.refresh_self(self.session)
             return 0
 
         # Save and update instance lists
-        self.write_self()
-
+        self.write_obj(self.session)
         return 1
 
     @classmethod
-    def create_self(cls, pat_id=""):
+    def create_self(cls, session, pat_id=""):
         """
         Object initialized from patient and adds to pat._visits.
         Loops through each detail and assigns to the object.
@@ -733,11 +628,11 @@ class Visit:
         """
         # Load a patient to generate and attach the visit. If id is passed through, do not prompt for ID.
         if pat_id:
-            pat = in_out.load_obj(classes.person.Patient, f"./data/Patient/{pat_id}.pkl")
+            pat = classes.person.Patient.load_obj(session, pat_id)
 
         else:
             print("Please select a patient to create a visit request.")
-            pat = classes.person.Patient.load_self()
+            pat = classes.person.Patient.get_obj(session)
 
         if not pat:
             return 0
@@ -761,46 +656,24 @@ class Visit:
 
         # Update all attributes from above. Quit if user quits during any attribute
         if not validate.get_info(obj, attr_list):
-            # Delete pat id attr if not created to also remove from patient.
-            del obj.pat_id
             return 0
 
         detail_dict = {
-            "Patient": obj.patient_name,
+            "Patient": pat.name,
             "Visit ID": obj.id,
-            "Visit Address": obj.address,
+            "Visit Address": pat.address,
             "Expected Date": obj.exp_date,
             "Time Window": f"{obj.time_earliest} - {obj.time_latest}"
         }
 
-        # If user confirms information is correct, a new object is created, written, and added to _tracked_instances
+        # If user confirms information is correct, a new object is created and written to database
         if not validate.confirm_info(obj, detail_dict):
-            # Delete pat id attr if not created to also remove from patient.
-            del obj.pat_id
             print("Record not created.")
             return 0
 
+        obj.write_obj(session)
+
         return 1
-
-    def refresh_self(self):
-        """Refreshes an existing object from file in the in case users need to backout changes. Returns the object"""
-        print("Reverting changes...")
-        in_out.load_obj(type(self), f"./data/{self.__class__.__name__}/{self.id}.pkl")
-
-    @classmethod
-    def load_self(cls):
-        """Class method to initialise the object from file. Returns the object"""
-        obj = in_out.get_obj(cls)
-
-        if not obj:
-            return 0
-
-        else:
-            return obj
-
-    @classmethod
-    def load_tracked_instances(cls):
-        in_out.load_tracked_obj(cls)
 
     def inactivate_self(self):
         """This method sets the status of a visit request to inactive and the sched status to "cancelled".
@@ -833,42 +706,18 @@ class Visit:
 
             # Update all attributes from above. Quit if user quits during any attribute
             if not validate.get_info(self, attr_list):
-                self.refresh_self()
+                self.refresh_self(self.session)
                 return 0
 
             prompt = "Are you sure you want to cancel this request? You will be unable to schedule this request. "
             if not validate.yes_or_no(prompt):
-                self.refresh_self()
+                self.refresh_self(self.session)
                 return 0
 
             self.status = 0
 
-            # Remove visit from patient's list
-            patient = in_out.load_obj(classes.person.Patient, f"./data/Patient/{self._pat_id}.pkl")
-
-            # If any linked patient fails to load, refresh and cancel action.
-            if not patient:
-                print("Unable to load linked patient.")
-                self.refresh_self()
-                return 0
-
-            patient.visits[self.exp_date].remove(self.id)
-            patient.write_self()
-
-            # Remove visit from assigned clinician
-            clin = in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{self._clin_id}.pkl")
-
-            # If linked clinician fails to load, refresh and cancel action.
-            if not clin:
-                print("Unable to load linked clinician.")
-                self.refresh_self()
-                return 0
-
-            clin.visits[self.exp_date].remove(self.id)
-            clin.write_self()
-
             # Cancel visit
-            self.write_self()
+            self.write_obj(self.session)
             print("Visit successfully cancelled.")
 
             return 1
@@ -876,45 +725,14 @@ class Visit:
     @classmethod
     def evaluate_requests(cls):
         """Evaluates all Visits and marks them as no shows if they are past their expected date"""
-        for instance in cls._tracked_instances:
-            try:
-                with open(f"./data/{cls.__qualname__}/{instance['id']}", "rb") as read_file:
-                    visit = pickle.load(read_file)
+        with cls.class_session_scope() as session:
+            for visit in session.query(Visit).distinct().all():
+                # Evaluate date against current date and mark as expired if due before current date
+                if datetime.strptime(visit.exp_date, '%d-%m-%Y').date() < date.today():
+                    visit.status = 0
+                    visit.cancel_reason = cls._c_cancel_reason[3]
 
-                    # Evaluate date against current date and mark as expired if due before current date
-                    if datetime.strptime(visit.exp_date, '%d-%m-%Y').date() < date.today():
-                        visit.status = 0
-                        visit.cancel_reason = cls._c_cancel_reason[3]
-
-                        # Remove visit from patient's list
-                        patient = in_out.load_obj(classes.person.Patient, f"./data/Patient/{visit._pat_id}.pkl")
-
-                        # If any linked patient fails to load, refresh and cancel action.
-                        if not patient:
-                            print("Unable to load linked patient.")
-                            visit.refresh_self()
-                            return 0
-
-                        patient.visits[visit.exp_date].remove(visit.id)
-                        patient.write_self()
-
-                        # Remove visit from assigned clinician
-                        clin = in_out.load_obj(classes.person.Clinician, f"./data/Clinician/{visit._clin_id}.pkl")
-
-                        # If linked clinician fails to load, refresh and cancel action.
-                        if not clin:
-                            print("Unable to load linked clinician.")
-                            visit.refresh_self()
-                            return 0
-
-                        clin.visits[visit.exp_date].remove(visit.id)
-                        clin.write_self()
-
-                        cls.write_self(visit)
-
-            except FileNotFoundError as err:
-                print("File could not be found.")
-                return err
+                    visit.write_obj(session)
 
     # TODO: Add a class method to reactivate a record
     # TODO: Add a method to find all visits today without a clinician
