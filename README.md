@@ -11,7 +11,7 @@ The data contained in this programme is broken down into 4 main classes:
 
 Each of these classes are importable from CSV or can be generated manually. There are a number of pointers via ID from one type of class to another. For example, Patients and Clinicians both store a pointer to Visit ID.
 
-Class instances are tracked using a tracked instance class attribute, which is populated at start up and appended when new objects are created and written.
+Each class instance is also a member of the DataManager class, which manages reading and writing to a SQLite database using SQLAlchemy ORM.
 
 ## Geolocation and Optimization Functions
 Each object has address attributes that are geocoded using Google's Geocoding API. A team manager can opt to generate an optimized route for the whole team or a single clinician. When run, the optimizer uses Google's OR tools to find the ideal route for the clinician(s).
