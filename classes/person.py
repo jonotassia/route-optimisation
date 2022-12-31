@@ -342,7 +342,7 @@ class Patient(Human, DataManagerMixin.Base):
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
     _c_inactive_reason = ("no longer under care", "expired", "added in error")
 
-    def __init__(self, status=1, name="", dob="", sex="", address="", team="", **kwargs):
+    def __init__(self, id=None, status=1, name="", dob="", sex="", address="", team="", **kwargs):
         """
         Initiates and writes-to-file a patient with the following attributes:
         id, first name, last name, middle name, date of birth, sex, and address.
@@ -351,7 +351,7 @@ class Patient(Human, DataManagerMixin.Base):
         # Inherit from top level class
         super().__init__(status, name, dob, sex, address)
 
-        self._id = next(self._id_iter)
+        self._id = id if id else next(Patient._id_iter)
         self.team_id = team
         self._death_date = None
         self._death_time = None
@@ -655,12 +655,13 @@ class Clinician(Human, DataManagerMixin.Base):
     visits = relationship("Visit", back_populates="clin")
     _inactive_reason = Column(String, nullable=True)
 
+    # Class Attributes
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
     _c_inactive_reason = ("no longer works here", "switched roles", "added in error")
     _c_skill_list = ("med administration", "specimen collection", "domestic tasks", "physical assessment")
     _c_discipline = ("doctor", "nurse", "physical therapist", "occupational Therapist", "medical assistant")
 
-    def __init__(self, status=1, name="", dob="", sex="", address="",
+    def __init__(self, id=None, status=1, name="", dob="", sex="", address="",
                  team="", start_time="800", end_time="1700", discipline=None,
                  skill_list=[], **kwargs):
         """Initiates and writes-to-file a clinician with the following attributes:
@@ -670,7 +671,7 @@ class Clinician(Human, DataManagerMixin.Base):
         # Inherit from superclass
         super().__init__(status, name, dob, sex, address)
 
-        self._id = next(self._id_iter)
+        self._id = id if id else next(Clinician._id_iter)
         self.start_address = address
         self.end_address = address
         self.start_time = start_time

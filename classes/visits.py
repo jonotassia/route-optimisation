@@ -29,6 +29,7 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
     _cancel_reason = Column(String, nullable=True)
     _sched_status = Column(String, nullable=True)
 
+    # Class Attributes
     _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
     _c_visit_complexity = ("simple", "routine", "complex")
     _c_visit_priority = ("green", "amber", "red")
@@ -37,14 +38,14 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
     _c_sched_status = ("unassigned", "assigned", "no show", "cancelled")
     _c_cancel_reason = ("clinician unavailable", "patient unavailable", "no longer needed", "expired", "system action")
 
-    def __init__(self, pat_id, clin_id=None, status=1, sched_status="unscheduled", time_earliest="", time_latest="",
+    def __init__(self, pat_id, id=None, clin_id=None, status=1, sched_status="unscheduled", time_earliest="", time_latest="",
                  exp_date="", visit_complexity=_c_visit_complexity[1], visit_priority=_c_visit_priority[0],
                  skill_list=[], discipline="", **kwargs):
         """Initializes a new request and links with pat_id. It contains the following attributes:
             req_id, pat_id, name, status, the earliest time, latest time, sched status, and cancel_reason"""
         super().__init__()
 
-        self._id = next(self._id_iter)
+        self._id = id if id else next(Visit._id_iter)
         self.exp_date = exp_date
         self.pat_id = pat_id
         self.clin_id = clin_id
