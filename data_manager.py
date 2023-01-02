@@ -1,10 +1,11 @@
 import pathlib
 import validate
 from sqlalchemy.orm import sessionmaker, declarative_base, reconstructor
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, desc
 from contextlib import contextmanager
 import pandas as pd
 import time
+import itertools
 
 class DataManagerMixin:
     """
@@ -261,3 +262,17 @@ class DataManagerMixin:
 
             except (FileNotFoundError, OSError):
                 print("File not found. Ensure the input file contains '.csv' at the end.")
+
+    @classmethod
+    def update_id_counter(cls):
+        """
+        Updates the id counter for the class to be the max id found in the SQL database.
+        :return: 1 if successful
+        """
+        max_id = cls.Session().query(cls).filter(cls._id >= 10000).order_by(desc(cls._id)).first()._id
+
+        if not max_id:
+            return 0
+
+        cls._id_iter = itertools.count(max_id+1)
+        return 1

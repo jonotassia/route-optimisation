@@ -30,7 +30,7 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
     _sched_status = Column(String, nullable=True)
 
     # Class Attributes
-    _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
+    _id_iter = itertools.count(10000)  # Initialize a counter for new ids. Updated on bootup by DataManagerMixin method.
     _c_visit_complexity = ("simple", "routine", "complex")
     _c_visit_priority = ("green", "amber", "red")
     _c_skill_list = classes.person.Clinician._c_skill_list

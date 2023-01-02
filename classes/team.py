@@ -24,7 +24,7 @@ class Team(DataManagerMixin, DataManagerMixin.Base):
     _plus_code = Column(String, nullable=True)
 
     # Class attributes
-    _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
+    _id_iter = itertools.count(10000)  # Initialize a counter for new ids. Updated on bootup by DataManagerMixin method.
 
     def __init__(self, id=None, status=1, name=None, address=None, **kwargs):
         """Initializes a new request and links with pat_id. It contains the following attributes:

@@ -339,7 +339,8 @@ class Patient(Human, DataManagerMixin.Base):
     _death_time = Column(Time, nullable=True)
     _inactive_reason = Column(String, nullable=True)
 
-    _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
+    # Class attribute
+    _id_iter = itertools.count(10000)  # Initialize a counter for new ids. Updated on bootup by DataManagerMixin method.
     _c_inactive_reason = ("no longer under care", "expired", "added in error")
 
     def __init__(self, id=None, status=1, name="", dob="", sex="", address="", team="", **kwargs):
@@ -656,7 +657,7 @@ class Clinician(Human, DataManagerMixin.Base):
     _inactive_reason = Column(String, nullable=True)
 
     # Class Attributes
-    _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
+    _id_iter = itertools.count(10000)  # Initialize a counter for new ids. Updated on bootup by DataManagerMixin method.
     _c_inactive_reason = ("no longer works here", "switched roles", "added in error")
     _c_skill_list = ("med administration", "specimen collection", "domestic tasks", "physical assessment")
     _c_discipline = ("doctor", "nurse", "physical therapist", "occupational Therapist", "medical assistant")
