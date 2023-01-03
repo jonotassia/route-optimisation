@@ -288,7 +288,7 @@ def get_info(obj, attr_dict_list: list):
     return 1
 
 
-def confirm_info(obj, detail_dict):
+def confirm_info(detail_dict):
     """
     This function will be used to confirm information for any object that is created from a class instance.
     It loops through the passed dictionary to display relevant parameters.

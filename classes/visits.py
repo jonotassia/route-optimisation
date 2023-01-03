@@ -3,7 +3,7 @@ import itertools
 import validate
 import classes
 import navigation
-from sqlalchemy import Column, String, Date, Time, Integer, PickleType, ForeignKey
+from sqlalchemy import Column, String, Date, Time, Integer, PickleType, ForeignKey, DateTime, func
 from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.orm import relationship
 from data_manager import DataManagerMixin
@@ -28,6 +28,8 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
     _discipline = Column(String, nullable=True)
     _cancel_reason = Column(String, nullable=True)
     _sched_status = Column(String, nullable=True)
+    created_instant = Column(DateTime, server_default=func.now())
+    edited_instant = Column(DateTime, on_update=func.now())
 
     # Class Attributes
     _id_iter = itertools.count(10000)  # Initialize a counter for new ids. Updated on bootup by DataManagerMixin method.
@@ -410,7 +412,7 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
         }
 
         # If user does not confirm info, changes will be reverted.
-        if not validate.confirm_info(self, detail_dict):
+        if not validate.confirm_info(detail_dict):
             self.refresh_self(self.session)
             return 0
 
@@ -541,7 +543,7 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
         }
 
         # If user does not confirm info, changes will be reverted.
-        if not validate.confirm_info(self, detail_dict):
+        if not validate.confirm_info(detail_dict):
             self.refresh_self(self.session)
             return 0
 
@@ -571,7 +573,7 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
         }
 
         # If user does not confirm info, changes will be reverted.
-        if not validate.confirm_info(self, detail_dict):
+        if not validate.confirm_info(detail_dict):
             self.refresh_self(self.session)
             return 0
 
@@ -607,7 +609,7 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
         }
 
         # If user does not confirm info, changes will be reverted.
-        if not validate.confirm_info(self, detail_dict):
+        if not validate.confirm_info(detail_dict):
             self.refresh_self(self.session)
             return 0
 
@@ -668,7 +670,7 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
         }
 
         # If user confirms information is correct, a new object is created and written to database
-        if not validate.confirm_info(obj, detail_dict):
+        if not validate.confirm_info(detail_dict):
             print("Record not created.")
             return 0
 

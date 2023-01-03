@@ -269,7 +269,12 @@ class DataManagerMixin:
         Updates the id counter for the class to be the max id found in the SQL database.
         :return: 1 if successful
         """
-        max_id = cls.Session().query(cls).filter(cls._id >= 10000).order_by(desc(cls._id)).first()._id
+        try:
+            max_id = cls.Session().query(cls).filter(cls._id >= 10000).order_by(desc(cls._id)).first()._id
+
+        # Verify that an object exists. If not, exit.
+        except AttributeError:
+            return 0
 
         if not max_id:
             return 0
