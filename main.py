@@ -6,6 +6,7 @@ from classes.person import Patient, Clinician
 from classes.visits import Visit
 from classes.team import Team
 from data_manager import DataManagerMixin
+from time import sleep
 
 """
 Primary stream - sequence of events:
@@ -37,6 +38,8 @@ def main():
 
     for cls in _class_list:
         cls.update_id_counter()
+
+    sleep(0.5)
 
     navigation.main_menu(_class_list)
 

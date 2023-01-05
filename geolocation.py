@@ -612,8 +612,9 @@ def return_solution(clins, visits, n_start_list, dropped_nodes, manager, routing
             clin_visits = [visits[index - n_start_list] for index in route_order[1:-1]]
 
             # Assign clinician to visit (which assigns the visit to the clinician as well) and save
-            for visit in clin_visits:
+            for index, visit in enumerate(clin_visits):
                 visit.clin_id = clin.id
+                visit._order = index
                 visit.sched_status = "assigned"
                 visit.write_obj(visit.session)
 
@@ -659,8 +660,9 @@ def return_solution(clins, visits, n_start_list, dropped_nodes, manager, routing
             clin_visits = [visits[index - n_start_list] for index in route_order[1:-1]]
 
             # Assign clinician to visit (which assigns the visit to the clinician as well) and save
-            for visit in clin_visits:
+            for index, visit in enumerate(clin_visits):
                 visit.clin_id = clin.id
+                visit._order = index
                 visit.sched_status = "assigned"
                 visit.write_obj(visit.session)
 
@@ -901,8 +903,22 @@ def display_route(obj, val_date=None):
         print("Invalid object. Returning...")
         return 0
 
-    # Load list of visits for each clinician as a list of lists
+    # Load list of visits for each clinician as a list of lists. Sort by optmized order.
     visits = [[visit for visit in clin.visits if visit._exp_date == val_date] for clin in clins]
+    visits = [sorted(visit_group, key=lambda x: x._order) for visit_group in visits]
+
+    # Verify that all visits have been given an order. Else: prompt to optimize or quit.
+    visits_missing_order = [visit for visit_group in visits for visit in visit_group if not visit._order]
+
+    if not visits_missing_order:
+        selection = validate.qu_input("These visits are not yet optimized. Would you like to optimize now?")
+
+        if not selection:
+            return 0
+
+        else:
+            optimize_route(obj)
+            return 1
 
     # Prompt user for which type of map to load
     print("Please select how you would like to view the route:\n"

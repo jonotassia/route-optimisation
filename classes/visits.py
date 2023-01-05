@@ -22,6 +22,7 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
     _exp_date = Column(Date, nullable=True)
     _time_earliest = Column(Time, nullable=True)
     _time_latest = Column(Time, nullable=True)
+    _order = Column(Integer)
     _visit_priority = Column(String, nullable=True)
     _visit_complexity = Column( String, nullable=True)
     _skill_list = Column(MutableList.as_mutable(PickleType), nullable=True)
