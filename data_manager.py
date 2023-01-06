@@ -1,10 +1,11 @@
 import pathlib
 import validate
 from sqlalchemy.orm import sessionmaker, declarative_base, reconstructor
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, desc
 from contextlib import contextmanager
 import pandas as pd
 import time
+import itertools
 
 class DataManagerMixin:
     """
@@ -17,7 +18,7 @@ class DataManagerMixin:
     connection_string = "sqlite:///" + BASE_DIR.as_posix() + "/data/routing.db"
 
     # Create engine that will be used to file to the SQLite database. Echo allows us to bypass comments produced by SQL
-    engine = create_engine(connection_string, echo=True)
+    engine = create_engine(connection_string)
 
     # Create and configure a sessionmaker class which we use to populate each individual table.
     Session = sessionmaker(bind=engine)
@@ -261,3 +262,22 @@ class DataManagerMixin:
 
             except (FileNotFoundError, OSError):
                 print("File not found. Ensure the input file contains '.csv' at the end.")
+
+    @classmethod
+    def update_id_counter(cls):
+        """
+        Updates the id counter for the class to be the max id found in the SQL database.
+        :return: 1 if successful
+        """
+        try:
+            max_id = cls.Session().query(cls).filter(cls._id >= 10000).order_by(desc(cls._id)).first()._id
+
+        # Verify that an object exists. If not, exit.
+        except AttributeError:
+            return 0
+
+        if not max_id:
+            return 0
+
+        cls._id_iter = itertools.count(max_id+1)
+        return 1

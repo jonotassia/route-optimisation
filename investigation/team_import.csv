@@ -1,2 +1,3 @@
-status,name,address
-1,Seattle Team 1,2900 S GRAHAM ST SEATTLE WA 98108-3128 USA
+id,status,name,address
+10000,1,Seattle Team 1,2900 S GRAHAM ST SEATTLE WA 98108-3128 USA
+10020,1,Bellevue Team 1,"14907 SE Newport Way, Bellevue, WA"

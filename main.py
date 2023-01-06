@@ -6,6 +6,8 @@ from classes.person import Patient, Clinician
 from classes.visits import Visit
 from classes.team import Team
 from data_manager import DataManagerMixin
+from time import sleep
+import logging
 
 """
 Primary stream - sequence of events:
@@ -29,11 +31,20 @@ Secondary actions available:
 
 
 def main():
+    sqla_logger = logging.getLogger('sqlalchemy')
+    sqla_logger.setLevel(logging.DEBUG)
+    sqla_logger.addHandler(logging.FileHandler('./data/sqla.log'))
+
     # Create database tables if not already present
     DataManagerMixin.create_tables()
 
     # Initialize a list of all classes and loop to populate instance tracking lists
     _class_list = (Patient, Clinician, Visit, Team)
+
+    for cls in _class_list:
+        cls.update_id_counter()
+
+    sleep(0.5)
 
     navigation.main_menu(_class_list)
 

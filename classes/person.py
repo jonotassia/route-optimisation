@@ -5,9 +5,9 @@ import navigation
 import validate
 import classes
 from data_manager import DataManagerMixin
-from sqlalchemy import Column, String, Date, Time, Integer, PickleType, ForeignKey
+from sqlalchemy import Column, String, Date, Time, DateTime, Integer, PickleType, ForeignKey, func
 from sqlalchemy.orm import relationship
-from sqlalchemy.ext.mutable import MutableList, MutableDict
+from sqlalchemy.ext.mutable import MutableList
 from time import sleep
 
 
@@ -199,7 +199,7 @@ class Human(DataManagerMixin):
         }
 
         # If user confirms information is correct, a new object is created and written
-        if not validate.confirm_info(obj, detail_dict):
+        if not validate.confirm_info(detail_dict):
             print("Record not created.")
             session.rollback()
             return 0
@@ -300,12 +300,12 @@ class Human(DataManagerMixin):
         self.team_id = team.id
 
         detail_dict = {
-            "Team ID": self.team.id,
-            "Team Name": self.team._name
+            "Team ID": team.id,
+            "Team Name": team._name
         }
 
         # If user does not confirm info, changes will be reverted.
-        if not validate.confirm_info(self, detail_dict):
+        if not validate.confirm_info(detail_dict):
             self.refresh_self(self.session)
             return 0
 
@@ -338,11 +338,14 @@ class Patient(Human, DataManagerMixin.Base):
     _death_date = Column(Date, nullable=True)
     _death_time = Column(Time, nullable=True)
     _inactive_reason = Column(String, nullable=True)
+    created_instant = Column(DateTime, server_default=func.now())
+    edited_instant = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
-    _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
+    # Class attribute
+    _id_iter = itertools.count(10000)  # Initialize a counter for new ids. Updated on bootup by DataManagerMixin method.
     _c_inactive_reason = ("no longer under care", "expired", "added in error")
 
-    def __init__(self, status=1, name="", dob="", sex="", address="", team="", **kwargs):
+    def __init__(self, id=None, status=1, name="", dob="", sex="", address="", team="", **kwargs):
         """
         Initiates and writes-to-file a patient with the following attributes:
         id, first name, last name, middle name, date of birth, sex, and address.
@@ -351,7 +354,7 @@ class Patient(Human, DataManagerMixin.Base):
         # Inherit from top level class
         super().__init__(status, name, dob, sex, address)
 
-        self._id = next(self._id_iter)
+        self._id = id if id else next(Patient._id_iter)
         self.team_id = team
         self._death_date = None
         self._death_time = None
@@ -654,13 +657,16 @@ class Clinician(Human, DataManagerMixin.Base):
     _skill_list = Column(MutableList.as_mutable(PickleType), nullable=True)
     visits = relationship("Visit", back_populates="clin")
     _inactive_reason = Column(String, nullable=True)
+    created_instant = Column(DateTime, server_default=func.now())
+    edited_instant = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
-    _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
+    # Class Attributes
+    _id_iter = itertools.count(10000)  # Initialize a counter for new ids. Updated on bootup by DataManagerMixin method.
     _c_inactive_reason = ("no longer works here", "switched roles", "added in error")
     _c_skill_list = ("med administration", "specimen collection", "domestic tasks", "physical assessment")
     _c_discipline = ("doctor", "nurse", "physical therapist", "occupational Therapist", "medical assistant")
 
-    def __init__(self, status=1, name="", dob="", sex="", address="",
+    def __init__(self, id=None, status=1, name="", dob="", sex="", address="",
                  team="", start_time="800", end_time="1700", discipline=None,
                  skill_list=[], **kwargs):
         """Initiates and writes-to-file a clinician with the following attributes:
@@ -670,7 +676,7 @@ class Clinician(Human, DataManagerMixin.Base):
         # Inherit from superclass
         super().__init__(status, name, dob, sex, address)
 
-        self._id = next(self._id_iter)
+        self._id = id if id else next(Clinician._id_iter)
         self.start_address = address
         self.end_address = address
         self.start_time = start_time
@@ -1019,7 +1025,7 @@ class Clinician(Human, DataManagerMixin.Base):
         }
 
         # If user does not confirm info, changes will be reverted.
-        if not validate.confirm_info(self, detail_dict):
+        if not validate.confirm_info(detail_dict):
             self.refresh_self(self.session)
             return 0
 
@@ -1049,7 +1055,7 @@ class Clinician(Human, DataManagerMixin.Base):
         }
 
         # If user does not confirm info, changes will be reverted.
-        if not validate.confirm_info(self, detail_dict):
+        if not validate.confirm_info(detail_dict):
             self.refresh_self(self.session)
             return 0
 
@@ -1079,7 +1085,7 @@ class Clinician(Human, DataManagerMixin.Base):
         }
 
         # If user does not confirm info, changes will be reverted.
-        if not validate.confirm_info(self, detail_dict):
+        if not validate.confirm_info(detail_dict):
             self.refresh_self(self.session)
             return 0
 
@@ -1112,7 +1118,7 @@ class Clinician(Human, DataManagerMixin.Base):
         }
 
         # If user does not confirm info, changes will be reverted.
-        if not validate.confirm_info(self, detail_dict):
+        if not validate.confirm_info(detail_dict):
             self.refresh_self(self.session)
             return 0
 
@@ -1159,7 +1165,7 @@ class Clinician(Human, DataManagerMixin.Base):
         }
 
         # If user does not confirm info, changes will be reverted.
-        if not validate.confirm_info(self, detail_dict):
+        if not validate.confirm_info(detail_dict):
             self.refresh_self(self.session)
             return 0
 

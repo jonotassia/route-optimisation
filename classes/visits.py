@@ -3,7 +3,7 @@ import itertools
 import validate
 import classes
 import navigation
-from sqlalchemy import Column, String, Date, Time, Integer, PickleType, ForeignKey
+from sqlalchemy import Column, String, Date, Time, Integer, PickleType, ForeignKey, DateTime, func
 from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.orm import relationship
 from data_manager import DataManagerMixin
@@ -22,14 +22,18 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
     _exp_date = Column(Date, nullable=True)
     _time_earliest = Column(Time, nullable=True)
     _time_latest = Column(Time, nullable=True)
+    _order = Column(Integer)
     _visit_priority = Column(String, nullable=True)
     _visit_complexity = Column( String, nullable=True)
     _skill_list = Column(MutableList.as_mutable(PickleType), nullable=True)
     _discipline = Column(String, nullable=True)
     _cancel_reason = Column(String, nullable=True)
     _sched_status = Column(String, nullable=True)
+    created_instant = Column(DateTime, server_default=func.now())
+    edited_instant = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
-    _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
+    # Class Attributes
+    _id_iter = itertools.count(10000)  # Initialize a counter for new ids. Updated on bootup by DataManagerMixin method.
     _c_visit_complexity = ("simple", "routine", "complex")
     _c_visit_priority = ("green", "amber", "red")
     _c_skill_list = classes.person.Clinician._c_skill_list
@@ -37,14 +41,14 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
     _c_sched_status = ("unassigned", "assigned", "no show", "cancelled")
     _c_cancel_reason = ("clinician unavailable", "patient unavailable", "no longer needed", "expired", "system action")
 
-    def __init__(self, pat_id, clin_id=None, status=1, sched_status="unscheduled", time_earliest="", time_latest="",
+    def __init__(self, pat_id, id=None, clin_id=None, status=1, sched_status="unscheduled", time_earliest="", time_latest="",
                  exp_date="", visit_complexity=_c_visit_complexity[1], visit_priority=_c_visit_priority[0],
                  skill_list=[], discipline="", **kwargs):
         """Initializes a new request and links with pat_id. It contains the following attributes:
             req_id, pat_id, name, status, the earliest time, latest time, sched status, and cancel_reason"""
         super().__init__()
 
-        self._id = next(self._id_iter)
+        self._id = id if id else next(Visit._id_iter)
         self.exp_date = exp_date
         self.pat_id = pat_id
         self.clin_id = clin_id
@@ -409,7 +413,7 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
         }
 
         # If user does not confirm info, changes will be reverted.
-        if not validate.confirm_info(self, detail_dict):
+        if not validate.confirm_info(detail_dict):
             self.refresh_self(self.session)
             return 0
 
@@ -540,7 +544,7 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
         }
 
         # If user does not confirm info, changes will be reverted.
-        if not validate.confirm_info(self, detail_dict):
+        if not validate.confirm_info(detail_dict):
             self.refresh_self(self.session)
             return 0
 
@@ -570,7 +574,7 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
         }
 
         # If user does not confirm info, changes will be reverted.
-        if not validate.confirm_info(self, detail_dict):
+        if not validate.confirm_info(detail_dict):
             self.refresh_self(self.session)
             return 0
 
@@ -606,7 +610,7 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
         }
 
         # If user does not confirm info, changes will be reverted.
-        if not validate.confirm_info(self, detail_dict):
+        if not validate.confirm_info(detail_dict):
             self.refresh_self(self.session)
             return 0
 
@@ -667,7 +671,7 @@ class Visit(DataManagerMixin, DataManagerMixin.Base):
         }
 
         # If user confirms information is correct, a new object is created and written to database
-        if not validate.confirm_info(obj, detail_dict):
+        if not validate.confirm_info(detail_dict):
             print("Record not created.")
             return 0
 

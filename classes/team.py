@@ -1,8 +1,7 @@
 # This file contains the Visit class to be used in the route optimisation tool.
 import itertools
-from sqlalchemy import Column, String, Integer, PickleType
+from sqlalchemy import Column, String, Integer, DateTime, func
 from sqlalchemy.orm import relationship
-from sqlalchemy.ext.mutable import MutableList
 from data_manager import DataManagerMixin
 import geolocation
 import validate
@@ -23,15 +22,18 @@ class Team(DataManagerMixin, DataManagerMixin.Base):
     _lat = Column(Integer, nullable=True)
     _lng = Column(Integer, nullable=True)
     _plus_code = Column(String, nullable=True)
+    created_instant = Column(DateTime, server_default=func.now())
+    edited_instant = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
-    _id_iter = itertools.count(10000)  # Create a counter to assign new value each time a new obj is created
+    # Class attributes
+    _id_iter = itertools.count(10000)  # Initialize a counter for new ids. Updated on bootup by DataManagerMixin method.
 
-    def __init__(self, status=1, name=None, address=None, **kwargs):
+    def __init__(self, id=None, status=1, name=None, address=None, **kwargs):
         """Initializes a new request and links with pat_id. It contains the following attributes:
             req_id, pat_id, name, status, address, the earliest time, latest time, sched status, and cancel_reason"""
         super().__init__()
 
-        self._id = next(self._id_iter)
+        self._id = id if id else next(Team._id_iter)
         self._name = name
         self.status = status
         self._pat_id = []
@@ -178,7 +180,7 @@ class Team(DataManagerMixin, DataManagerMixin.Base):
             }
 
             # If user does not confirm info, changes will be reverted.
-            if not validate.confirm_info(self, detail_dict):
+            if not validate.confirm_info(detail_dict):
                 self.refresh_self(self.session)
                 return 0
 
@@ -207,7 +209,7 @@ class Team(DataManagerMixin, DataManagerMixin.Base):
         }
 
         # If user does not confirm info, changes will be reverted.
-        if not validate.confirm_info(self, detail_dict):
+        if not validate.confirm_info(detail_dict):
             self.refresh_self(self.session)
             return 0
 
@@ -250,7 +252,7 @@ class Team(DataManagerMixin, DataManagerMixin.Base):
         }
 
         # If user confirms information is correct, a new object is created and written to db
-        if not validate.confirm_info(obj, detail_dict):
+        if not validate.confirm_info(detail_dict):
             print("Record not created.")
             return 0
 
