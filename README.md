@@ -51,3 +51,4 @@ Below is a list of known issues:
 1. When searching for an object, inactive objects are not currently filtered out even if the user indicates they do not want to see them.
 2. Route optimisation currently prompts the user for a travel mode (driving, walking, etc) rather than using a preferred mode for each clinician.
 3. Performance is slow in route optimisation for large teams and in route visualisation when showing the full route due to the recent SQLAlchemy ORM transition.
+4. Some routes visualized using OSMNx have Polylines that do not perfectly follow paths due to completeness of mapping data.
