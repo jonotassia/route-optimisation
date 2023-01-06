@@ -7,6 +7,7 @@ from classes.visits import Visit
 from classes.team import Team
 from data_manager import DataManagerMixin
 from time import sleep
+import logging
 
 """
 Primary stream - sequence of events:
@@ -30,6 +31,10 @@ Secondary actions available:
 
 
 def main():
+    sqla_logger = logging.getLogger('sqlalchemy')
+    sqla_logger.setLevel(logging.DEBUG)
+    sqla_logger.addHandler(logging.FileHandler('./data/sqla.log'))
+
     # Create database tables if not already present
     DataManagerMixin.create_tables()
 

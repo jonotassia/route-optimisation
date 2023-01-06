@@ -23,7 +23,7 @@ class Team(DataManagerMixin, DataManagerMixin.Base):
     _lng = Column(Integer, nullable=True)
     _plus_code = Column(String, nullable=True)
     created_instant = Column(DateTime, server_default=func.now())
-    edited_instant = Column(DateTime, on_update=func.now())
+    edited_instant = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     # Class attributes
     _id_iter = itertools.count(10000)  # Initialize a counter for new ids. Updated on bootup by DataManagerMixin method.

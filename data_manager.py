@@ -18,7 +18,7 @@ class DataManagerMixin:
     connection_string = "sqlite:///" + BASE_DIR.as_posix() + "/data/routing.db"
 
     # Create engine that will be used to file to the SQLite database. Echo allows us to bypass comments produced by SQL
-    engine = create_engine(connection_string, echo=True)
+    engine = create_engine(connection_string)
 
     # Create and configure a sessionmaker class which we use to populate each individual table.
     Session = sessionmaker(bind=engine)
